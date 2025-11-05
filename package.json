@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@google/genai": "^1.28.0",
     "@monaco-editor/react": "^4.7.0",
     "@playwright/test": "^1.56.0",
     "@types/bcryptjs": "^2.4.6",
