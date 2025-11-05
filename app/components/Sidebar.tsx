@@ -15,14 +15,21 @@ interface SidebarProps {
   onOpenSettings: () => void
   onLoadChat: (chatId: string) => void
   currentChatId: string | null
+  isOpen?: boolean
+  onToggle?: () => void
 }
 
-export default function Sidebar({ onOpenAuth, onNewChat, onOpenSettings, onLoadChat, currentChatId }: SidebarProps) {
-  const [isOpen, setIsOpen] = useState(false)
+export default function Sidebar({ onOpenAuth, onNewChat, onOpenSettings, onLoadChat, currentChatId, isOpen: isOpenProp = true, onToggle }: SidebarProps) {
+  const [isMobileOpen, setIsMobileOpen] = useState(false)
   const [showUserGuide, setShowUserGuide] = useState(false)
   const [chatHistories, setChatHistories] = useState<any[]>([])
+  const [isMounted, setIsMounted] = useState(false)
   const { user, isAuthenticated, logout } = useAuthStore()
   const { messages, clearMessages } = useChatStore()
+
+  useEffect(() => {
+    setIsMounted(true)
+  }, [])
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -45,14 +52,14 @@ export default function Sidebar({ onOpenAuth, onNewChat, onOpenSettings, onLoadC
   const handleNewChat = () => {
     onNewChat()
     if (window.innerWidth < 1024) {
-      setIsOpen(false)
+      setIsMobileOpen(false)
     }
   }
 
   const handleLoadChat = (chatId: string) => {
     onLoadChat(chatId)
     if (window.innerWidth < 1024) {
-      setIsOpen(false)
+      setIsMobileOpen(false)
     }
   }
 
@@ -94,23 +101,34 @@ export default function Sidebar({ onOpenAuth, onNewChat, onOpenSettings, onLoadC
 
   return (
     <>
+      {/* Mobile Toggle */}
       <button
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={() => setIsMobileOpen(!isMobileOpen)}
         className="lg:hidden fixed top-4 left-4 z-50 p-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition-all"
       >
-        {isOpen ? <FiX className="w-6 h-6" /> : <FiMenu className="w-6 h-6" />}
+        {isMobileOpen ? <FiX className="w-6 h-6" /> : <FiMenu className="w-6 h-6" />}
       </button>
 
+      {/* Desktop Toggle */}
+      {!isOpenProp && (
+        <button
+          onClick={onToggle}
+          className="hidden lg:block fixed top-4 left-4 z-50 p-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition-all"
+        >
+          <FiMenu className="w-6 h-6" />
+        </button>
+      )}
+
       <AnimatePresence>
-        {(isOpen || window.innerWidth >= 1024) && (
+        {isMounted && ((isMobileOpen && window.innerWidth < 1024) || (isOpenProp && window.innerWidth >= 1024)) && (
           <>
-            {isOpen && (
+            {isMobileOpen && (
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 className="lg:hidden fixed inset-0 bg-black/50 backdrop-blur-sm z-40"
-                onClick={() => setIsOpen(false)}
+                onClick={() => setIsMobileOpen(false)}
               />
             )}
             
@@ -120,11 +138,21 @@ export default function Sidebar({ onOpenAuth, onNewChat, onOpenSettings, onLoadC
               exit={{ x: -300 }}
               className="fixed top-0 left-0 h-screen w-80 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 flex flex-col z-40 overflow-hidden"
             >
-              <div className="p-4 border-b border-gray-200 dark:border-gray-800">
-                <h1 className="text-xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
-                  Devmate v2.1
-                </h1>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Powered by Gemini Pro</p>
+              <div className="p-4 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between">
+                <div>
+                  <h1 className="text-xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+                    Devmate v2.1
+                  </h1>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Powered by OpenAI GPT-4</p>
+                </div>
+                {/* Desktop Close Button */}
+                <button
+                  onClick={onToggle}
+                  className="hidden lg:block p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-600 dark:text-gray-400"
+                  title="Close sidebar"
+                >
+                  <FiX className="w-5 h-5" />
+                </button>
               </div>
 
               {isAuthenticated ? (
@@ -195,7 +223,7 @@ export default function Sidebar({ onOpenAuth, onNewChat, onOpenSettings, onLoadC
                         onClick={() => {
                           setShowUserGuide(true)
                           if (window.innerWidth < 1024) {
-                            setIsOpen(false)
+                            setIsMobileOpen(false)
                           }
                         }}
                         className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-700 dark:text-gray-300"
@@ -210,7 +238,7 @@ export default function Sidebar({ onOpenAuth, onNewChat, onOpenSettings, onLoadC
                         onClick={() => {
                           onOpenSettings()
                           if (window.innerWidth < 1024) {
-                            setIsOpen(false)
+                            setIsMobileOpen(false)
                           }
                         }}
                         className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-700 dark:text-gray-300"
@@ -246,7 +274,7 @@ export default function Sidebar({ onOpenAuth, onNewChat, onOpenSettings, onLoadC
                     onClick={() => {
                       onOpenAuth()
                       if (window.innerWidth < 1024) {
-                        setIsOpen(false)
+                        setIsMobileOpen(false)
                       }
                     }}
                     className="px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg hover:from-indigo-700 hover:to-purple-700 transition-all font-medium"

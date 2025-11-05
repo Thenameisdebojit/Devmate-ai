@@ -24,6 +24,8 @@ export default function Home() {
   const [showOnboarding, setShowOnboarding] = useState(false)
   const [showHelpModal, setShowHelpModal] = useState(false)
   const [currentChatId, setCurrentChatId] = useState<string | null>(null)
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true)
+  const [saveTimeout, setSaveTimeout] = useState<NodeJS.Timeout | null>(null)
 
   const { clearMessages, messages, setMessages, currentDomain, setDomain } = useChatStore()
   const { checkAuth, isAuthenticated, isLoading: authLoading } = useAuthStore()
@@ -54,7 +56,7 @@ export default function Home() {
         const response = await fetch('/api/health')
         if (!response.ok) {
           toast.error(
-            'API key not configured! Add GEMINI_API_KEY and MONGODB_URI to Secrets',
+            'API key not configured! Add OPENAI_API_KEY and MONGODB_URI to Secrets',
             { duration: 6000 }
           )
         }
@@ -67,7 +69,13 @@ export default function Home() {
 
   useEffect(() => {
     if (isAuthenticated && messages.length > 0) {
-      saveCurrentChat()
+      if (saveTimeout) {
+        clearTimeout(saveTimeout)
+      }
+      const timeout = setTimeout(() => {
+        saveCurrentChat()
+      }, 2000)
+      setSaveTimeout(timeout)
     }
   }, [messages, isAuthenticated])
 
@@ -156,6 +164,8 @@ export default function Home() {
           onOpenSettings={() => setShowSettingsModal(true)}
           onLoadChat={handleLoadChat}
           currentChatId={currentChatId}
+          isOpen={isSidebarOpen}
+          onToggle={() => setIsSidebarOpen(!isSidebarOpen)}
         />
 
         <Suspense fallback={null}>
@@ -180,9 +190,9 @@ export default function Home() {
         </Suspense>
 
         {/* Main Chat Area */}
-        <div className="flex-1 flex flex-col lg:ml-80">
+        <div className={`flex-1 flex flex-col transition-all duration-300 ${isSidebarOpen ? 'lg:ml-80' : 'lg:ml-0'}`}>
           <div className="border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
-            <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
+            <div className="max-w-4xl mx-auto px-4 py-3 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-4">
               <DomainSelector value={currentDomain} onChange={setDomain} />
               <ThemeToggle />
             </div>

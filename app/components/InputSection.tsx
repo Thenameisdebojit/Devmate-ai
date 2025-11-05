@@ -14,6 +14,8 @@ interface UploadedFile {
   file: File
   preview: string
   type: string
+  name?: string
+  content?: string
 }
 
 export default function InputSection({ onNewChat }: InputSectionProps) {
@@ -31,25 +33,43 @@ export default function InputSection({ onNewChat }: InputSectionProps) {
     }
   }, [prompt])
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files
     if (!files) return
 
-    Array.from(files).forEach((file) => {
-      if (file.type.startsWith('image/')) {
-        const reader = new FileReader()
-        reader.onload = (e) => {
-          setUploadedFiles(prev => [...prev, {
-            file,
-            preview: e.target?.result as string,
-            type: file.type
-          }])
-        }
-        reader.readAsDataURL(file)
-      } else {
-        toast.error('Only image files are supported')
-      }
+    const formData = new FormData()
+    Array.from(files).forEach(file => {
+      formData.append('files', file)
     })
+
+    try {
+      toast.loading('Processing files...', { id: 'file-upload' })
+      const response = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to process files')
+      }
+
+      const data = await response.json()
+      
+      data.files.forEach((processedFile: any, index: number) => {
+        const originalFile = Array.from(files)[index]
+        setUploadedFiles(prev => [...prev, {
+          file: originalFile,
+          preview: processedFile.type === 'image' ? processedFile.content : '',
+          type: processedFile.type,
+          name: processedFile.name,
+          content: processedFile.content
+        }])
+      })
+
+      toast.success(`${data.count} file(s) processed`, { id: 'file-upload' })
+    } catch (error) {
+      toast.error('Failed to process files', { id: 'file-upload' })
+    }
     
     if (fileInputRef.current) {
       fileInputRef.current.value = ''
@@ -88,19 +108,24 @@ export default function InputSection({ onNewChat }: InputSectionProps) {
     })
 
     try {
-      const formData = new FormData()
-      formData.append('action', 'generate')
-      formData.append('prompt', userPrompt)
-      formData.append('domain', currentDomain)
-      formData.append('chatHistory', JSON.stringify(messages))
-      
-      uploadedFiles.forEach((item, index) => {
-        formData.append(`file_${index}`, item.file)
-      })
+      const filesData = uploadedFiles.map(f => ({
+        name: f.name || f.file.name,
+        type: f.type,
+        content: f.content || ''
+      }))
 
       const response = await fetch('/api/chat', {
         method: 'POST',
-        body: formData,
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          action: 'generate',
+          prompt: userPrompt,
+          domain: currentDomain,
+          chatHistory: messages,
+          files: filesData
+        })
       })
 
       if (!response.ok) {
@@ -111,18 +136,22 @@ export default function InputSection({ onNewChat }: InputSectionProps) {
       const reader = response.body?.getReader()
       const decoder = new TextDecoder()
       let accumulatedText = ''
+      let buffer = ''
 
       if (reader) {
         while (true) {
           const { done, value } = await reader.read()
           if (done) break
 
-          const chunk = decoder.decode(value)
-          const lines = chunk.split('\n')
+          const chunk = decoder.decode(value, { stream: true })
+          buffer += chunk
+          
+          const lines = buffer.split('\n')
+          buffer = lines.pop() || ''
 
           for (const line of lines) {
             if (line.startsWith('data: ')) {
-              const data = line.slice(6)
+              const data = line.slice(6).trim()
               if (data === '[DONE]') break
 
               try {
@@ -132,7 +161,7 @@ export default function InputSection({ onNewChat }: InputSectionProps) {
                   updateLastMessage(accumulatedText)
                 }
               } catch (e) {
-                // Ignore parsing errors
+                console.warn('Failed to parse SSE chunk:', data)
               }
             }
           }
@@ -211,7 +240,7 @@ export default function InputSection({ onNewChat }: InputSectionProps) {
         <input
           ref={fileInputRef}
           type="file"
-          accept="image/*"
+          accept="image/*,.pdf,.docx,.doc,.csv,.txt"
           multiple
           onChange={handleFileSelect}
           className="hidden"

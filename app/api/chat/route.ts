@@ -1,7 +1,9 @@
-import { GoogleGenerativeAI } from '@google/generative-ai'
+import OpenAI from 'openai'
 import { NextRequest, NextResponse } from 'next/server'
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '')
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY || '',
+})
 
 const SYSTEM_INSTRUCTION = `You are an elite software engineer with 15+ years of experience. You write production-grade code that is:
 - Complete and fully functional with no placeholders or TODOs
@@ -37,11 +39,11 @@ function detectIntent(prompt: string) {
 
 export async function POST(req: NextRequest) {
   try {
-    const { prompt, action, code, instructions, error, domain, chatHistory } = await req.json()
+    const { prompt, action, code, instructions, error, domain, chatHistory, files } = await req.json()
 
-    if (!process.env.GEMINI_API_KEY) {
+    if (!process.env.OPENAI_API_KEY) {
       return NextResponse.json(
-        { error: 'Service unavailable: API key not configured' },
+        { error: 'Service unavailable: OpenAI API key not configured' },
         { status: 503 }
       )
     }
@@ -52,43 +54,39 @@ export async function POST(req: NextRequest) {
     // Adjust temperature based on intent
     const temperature = intent === 'conversation' ? 0.8 : 0.3
     
-    // Build context from chat history
-    let historyContext = ''
+    // Build messages array from chat history for OpenAI
+    const messages: OpenAI.Chat.ChatCompletionMessageParam[] = []
+    
+    // Add system message
+    const systemMessage = intent === 'conversation' 
+      ? 'You are Devmate, a friendly and helpful AI coding assistant. You can have natural conversations and help with programming tasks. Be warm, professional, and concise.'
+      : SYSTEM_INSTRUCTION
+    
+    messages.push({
+      role: 'system',
+      content: systemMessage
+    })
+    
+    // Add chat history
     if (chatHistory && chatHistory.length > 0) {
-      const recentHistory = chatHistory.slice(-4).map((msg: any) => 
-        `${msg.type === 'user' ? 'User' : 'Assistant'}: ${msg.content}`
-      ).join('\n')
-      historyContext = `\n**CONVERSATION HISTORY:**\n${recentHistory}\n\n`
+      chatHistory.slice(-6).forEach((msg: any) => {
+        messages.push({
+          role: msg.type === 'user' ? 'user' : 'assistant',
+          content: msg.content
+        })
+      })
     }
 
-    // Use Gemini 2.5 Pro for premium quality responses
-    const model = genAI.getGenerativeModel({ 
-      model: 'gemini-2.5-pro',
-      systemInstruction: intent === 'conversation' 
-        ? 'You are Devmate, a friendly and helpful AI coding assistant. You can have natural conversations and help with programming tasks. Be warm, professional, and concise.'
-        : SYSTEM_INSTRUCTION,
-      generationConfig: {
-        temperature,
-        topP: 0.95,
-        topK: 40,
-        maxOutputTokens: 2048,
-      }
-    })
-
-    let fullPrompt = ''
+    let userMessage = ''
     const domainContext = domain || 'General'
 
+    // Build user message based on action
     switch (action) {
       case 'generate':
         if (intent === 'conversation') {
-          fullPrompt = `${historyContext}You are Devmate, a helpful AI coding assistant specializing in ${domainContext}.
-          
-**USER MESSAGE:**
-${prompt}
-
-Respond naturally and helpfully. If they're greeting you, greet them back warmly. If they're asking about your capabilities, explain what you can help with. Keep responses friendly and concise.`
+          userMessage = prompt
         } else {
-          fullPrompt = `${historyContext}You are a ${domainContext} expert. Create complete, production-ready code.
+          userMessage = `You are a ${domainContext} expert. Create complete, production-ready code.
 
 **REQUIREMENTS:**
 1. Complete, runnable code - no placeholders or TODOs
@@ -108,7 +106,7 @@ Clean, working code. Keep it concise and professional.`
         break
 
       case 'explain':
-        fullPrompt = `Analyze and explain this code in detail. Provide:
+        userMessage = `Analyze and explain this code in detail. Provide:
 
 1. **Overview**: What does this code do? (2-3 sentences)
 2. **Step-by-Step Breakdown**: Explain each major section line-by-line
@@ -121,13 +119,11 @@ Clean, working code. Keep it concise and professional.`
 **CODE TO EXPLAIN:**
 \`\`\`
 ${code}
-\`\`\`
-
-Be thorough and educational. Assume the reader wants to deeply understand the code.`
+\`\`\``
         break
 
       case 'rewrite':
-        fullPrompt = `Refactor this code to production quality.
+        userMessage = `Refactor this code to production quality.
 
 **OBJECTIVES:**
 1. Improve readability and maintainability
@@ -147,7 +143,7 @@ Refactored code with improvements. Briefly explain key changes after the code.`
         break
 
       case 'fix':
-        fullPrompt = `Debug and fix this code.
+        userMessage = `Debug and fix this code.
 
 **REQUIREMENTS:**
 1. Identify and fix all bugs
@@ -171,15 +167,35 @@ Fixed code with brief explanation of changes.`
         return NextResponse.json({ error: 'Invalid action' }, { status: 400 })
     }
 
-    const result = await model.generateContentStream(fullPrompt)
+    // Add file context if files are provided
+    if (files && files.length > 0) {
+      userMessage = `${userMessage}\n\n**ATTACHED FILES:**\n${files.map((f: any) => `- ${f.name}: ${f.content.substring(0, 1000)}${f.content.length > 1000 ? '...' : ''}`).join('\n')}`
+    }
+
+    // Add the current user message
+    messages.push({
+      role: 'user',
+      content: userMessage
+    })
+
+    // Create streaming response with OpenAI GPT-4
+    const stream = await openai.chat.completions.create({
+      model: 'gpt-4o',
+      messages: messages,
+      temperature: temperature,
+      stream: true,
+      max_tokens: 4096,
+    })
 
     const encoder = new TextEncoder()
-    const stream = new ReadableStream({
+    const readableStream = new ReadableStream({
       async start(controller) {
         try {
-          for await (const chunk of result.stream) {
-            const text = chunk.text()
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text })}\n\n`))
+          for await (const chunk of stream) {
+            const text = chunk.choices[0]?.delta?.content || ''
+            if (text) {
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text })}\n\n`))
+            }
           }
           controller.enqueue(encoder.encode('data: [DONE]\n\n'))
           controller.close()
@@ -190,7 +206,7 @@ Fixed code with brief explanation of changes.`
       },
     })
 
-    return new Response(stream, {
+    return new Response(readableStream, {
       headers: {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
