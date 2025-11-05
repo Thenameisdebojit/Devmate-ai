@@ -1,26 +1,27 @@
-# Devmate v2.0 - AI Coding Assistant
+# Devmate v2.0 - Hybrid AI Coding Assistant
 
-A modern, full-stack AI coding assistant powered by Google's Gemini AI, built with Next.js 14.
+A modern, full-stack AI coding assistant powered by **OpenAI GPT-5** and **Google Gemini 2.5 Pro**, built with Next.js 14. Features intelligent model routing and full application generation capabilities.
 
 ## ⚠️ IMPORTANT: First Time Setup
 
 **Before running the app, you MUST configure environment variables:**
 
-1. **Run the quick setup checker:**
+1. **Copy `.env.example` to `.env.local`:**
+   ```bash
+   cp .env.example .env.local
+   ```
+
+2. **Fill in your API keys in `.env.local`:**
+   - `OPENAI_API_KEY` - Get from https://platform.openai.com/api-keys
+   - `GEMINI_API_KEY` - Get from https://ai.google.dev/gemini-api/docs/api-key
+   - `MONGODB_URI` - Get from https://www.mongodb.com/cloud/atlas
+   - `JWT_SECRET` - Any random secure string (32+ characters)
+   - `USE_AI_ORCHESTRATOR` - Set to `true` to enable hybrid AI routing (recommended)
+
+3. **Run the quick setup checker:**
    ```bash
    node check-env.js
    ```
-   or on Windows:
-   ```batch
-   QUICK_FIX.bat
-   ```
-
-2. **Edit `.env.local` and fill in your API keys:**
-   - `GEMINI_API_KEY` - Get from https://makersuite.google.com/app/apikey
-   - `MONGODB_URI` - Get from https://www.mongodb.com/cloud/atlas
-   - `JWT_SECRET` - Any random secure string (32+ characters)
-
-3. **See detailed instructions:** Check `SETUP_LOCAL.md` for step-by-step guide
 
 ---
 
@@ -57,16 +58,35 @@ A modern, full-stack AI coding assistant powered by Google's Gemini AI, built wi
 
 ## 🚀 Features
 
+### 🤖 Hybrid AI System
+- **Intelligent Model Routing** - Automatically selects the best AI model (GPT-5 or Gemini 2.5 Pro) for each task
+- **GPT-5 for Code** - Uses OpenAI's latest GPT-5 for code generation, building, and complex implementations
+- **Gemini 2.5 Pro for Reasoning** - Leverages Google Gemini for explanations, analysis, and retrieval tasks
+- **Automatic Failover** - Seamlessly switches between models if one fails
+
+### 🏗️ Full Application Generator (Web Development Domain)
+- **Complete App Generation** - Generate entire applications from natural language descriptions
+- **Multi-Framework Support** - Supports Next.js, React, Vue.js, Express.js, Flask, FastAPI, Angular, and Svelte
+- **Real-time Progress** - Live progress indicators showing generation steps
+- **Project Preview** - View all generated files before downloading
+- **One-Click Download** - Export complete projects as ZIP files
+- **Production-Ready Code** - Generates complete, runnable applications with proper structure
+
+### 💻 Core Coding Features
 - **Code Generation** - Generate production-ready code from natural language prompts
 - **Code Explanation** - Get detailed step-by-step explanations of any code
 - **Code Rewriting** - Improve code quality, readability, and performance
 - **Code Fixing** - Fix bugs and errors with AI assistance
-- **Domain Selection** - Specialized support for Python, JavaScript, TypeScript, React, Node.js, Go, and Rust
+- **Domain Selection** - Specialized support for General, Web Development, Machine Learning, Data Science, DevOps, and Mobile Development
 - **Real-time Streaming** - ChatGPT-like streaming responses for better UX
+
+### 🎨 UI/UX
 - **Glassmorphism UI** - Beautiful modern interface with frosted glass effects
 - **Dark/Light Mode** - Smooth theme switching with persistent preferences
+- **Command Palette (Cmd/Ctrl+K)** - Global command bar with fuzzy search
+- **Monaco Editor** - Professional code editor with syntax highlighting
 - **Copy & Download** - One-click copy to clipboard and smart file downloads
-- **Conversation Management** - Export chat history and clear conversations
+- **Responsive Design** - Works seamlessly on desktop, tablet, and mobile
 
 ## 🛠️ Tech Stack
 
@@ -74,11 +94,16 @@ A modern, full-stack AI coding assistant powered by Google's Gemini AI, built wi
 - **Language**: TypeScript
 - **Styling**: Tailwind CSS with custom glassmorphism
 - **State**: Zustand
-- **AI**: Google Gemini 2.5 pro
+- **AI Models**: 
+  - OpenAI GPT-5 (code generation, building, complex tasks)
+  - Google Gemini 2.5 Pro/Flash (reasoning, explanations, analysis)
+- **Database**: MongoDB with Mongoose ODM
+- **Authentication**: JWT with HTTP-only cookies
 - **Notifications**: React Hot Toast
 - **Animations**: Framer Motion
 - **Code Editor**: Monaco Editor (lazy-loaded)
 - **Search**: Fuse.js (fuzzy search)
+- **File Processing**: Archiver (ZIP), PDF-parse, Mammoth (DOCX), CSV-parser
 - **Config**: YAML (js-yaml)
 
 ## ⌨️ Keyboard Shortcuts

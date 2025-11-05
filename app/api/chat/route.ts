@@ -1,9 +1,12 @@
 import OpenAI from 'openai'
 import { NextRequest, NextResponse } from 'next/server'
+import { chooseModel, streamAIModelWithFailover } from '@/lib/aiOrchestrator'
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY || '',
 })
+
+const USE_ORCHESTRATOR = process.env.USE_AI_ORCHESTRATOR === 'true'
 
 const SYSTEM_INSTRUCTION = `You are an elite software engineer with 15+ years of experience. You write production-grade code that is:
 - Complete and fully functional with no placeholders or TODOs
@@ -178,7 +181,55 @@ Fixed code with brief explanation of changes.`
       content: userMessage
     })
 
-    // Create streaming response with OpenAI GPT-4
+    const encoder = new TextEncoder()
+    
+    // Use AI orchestrator if enabled, otherwise use direct OpenAI
+    if (USE_ORCHESTRATOR && process.env.GEMINI_API_KEY) {
+      const selectedModel = chooseModel(userMessage, action, domain)
+      
+      const readableStream = new ReadableStream({
+        async start(controller) {
+          try {
+            controller.enqueue(
+              encoder.encode(`data: ${JSON.stringify({ modelUsed: selectedModel })}\n\n`)
+            )
+            
+            const fullPrompt = messages.map(m => {
+              if (m.role === 'system') return `System: ${m.content}`
+              if (m.role === 'user') return `User: ${m.content}`
+              return `Assistant: ${m.content}`
+            }).join('\n\n')
+            
+            for await (const text of streamAIModelWithFailover({
+              prompt: fullPrompt,
+              systemInstruction: systemMessage,
+              temperature,
+              maxTokens: 4096,
+              action,
+              domain,
+            })) {
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text })}\n\n`))
+            }
+            
+            controller.enqueue(encoder.encode('data: [DONE]\n\n'))
+            controller.close()
+          } catch (error) {
+            console.error('Streaming error:', error)
+            controller.error(error)
+          }
+        },
+      })
+      
+      return new Response(readableStream, {
+        headers: {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          'Connection': 'keep-alive',
+        },
+      })
+    }
+    
+    // Legacy OpenAI-only streaming
     const stream = await openai.chat.completions.create({
       model: 'gpt-4o',
       messages: messages,
@@ -187,7 +238,6 @@ Fixed code with brief explanation of changes.`
       max_tokens: 4096,
     })
 
-    const encoder = new TextEncoder()
     const readableStream = new ReadableStream({
       async start(controller) {
         try {

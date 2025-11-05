@@ -8,6 +8,7 @@ import LoadingBar from './components/LoadingBar'
 import WelcomePage from './components/WelcomePage'
 import DomainSelector from './components/DomainSelector'
 import ThemeToggle from './components/ThemeToggle'
+import AppGeneratorPanel from './components/AppGeneratorPanel'
 import { useChatStore } from './store/useChatStore'
 import { useAuthStore } from './store/useAuthStore'
 import { useTheme } from './components/ThemeProvider'
@@ -199,7 +200,14 @@ export default function Home() {
           </div>
 
           <div className="flex-1 overflow-y-auto">
-            <ChatWindow />
+            <div className="max-w-6xl mx-auto px-4 py-6">
+              {currentDomain === 'Web Development' && (
+                <div className="mb-6">
+                  <AppGeneratorPanel />
+                </div>
+              )}
+              <ChatWindow />
+            </div>
           </div>
 
           <div className="border-t border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
