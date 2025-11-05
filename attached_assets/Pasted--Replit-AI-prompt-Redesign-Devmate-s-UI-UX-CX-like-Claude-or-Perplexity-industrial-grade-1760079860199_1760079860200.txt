@@ -1,0 +1,156 @@
+** Replit AI prompt** :
+
+* *Redesign Devmate’s UI/UX/CX* like Claude or Perplexity (industrial-grade, minimal, glassy, premium feel).
+* *Upgrade backend model* → from Gemini 2.5 Flash → Gemini 2.5 Pro.
+* *Make generation faster*, smarter, and concise (minimal comments in code).
+* *Fix the “Regenerate” button* (ensure working).
+* *Add “Copy Prompt” button* for user’s input.
+* *Keep feature parity but elevate everything visually and functionally.*
+
+*Replit AI system prompt* — paste this directly into Replit’s “Generate improvements” box or AI chat window:
+
+---
+
+# 🧠 Replit AI Full Prompt — *Devmate Industrial Redesign & AI Upgrade*
+
+*Role:* You are a full-stack product team (senior UI/UX designer + frontend architect + AI engineer).
+Your task is to *redesign and optimize the Devmate app* into a *premium Claude/Perplexity-style developer assistant* with faster AI responses, elegant design, and seamless user experience.
+
+---
+## 🔍 Current Overview
+
+* Framework: *Next.js 14 (App Router)*
+* Language: *TypeScript*
+* Styling: *Tailwind CSS*
+* State: *Zustand*
+* AI Backend: *Gemini 2.5 Flash (needs upgrade → Gemini 2.5 Pro)*
+* Notifications: *react-hot-toast*
+* Problem: Current UI looks generic and slow, with verbose AI responses and nonfunctional “Regenerate” button.
+
+---
+
+## 🎯 Objectives
+
+1. *Redesign the entire UI/UX* to look and feel like Claude AI or Perplexity AI:
+
+   * Minimal, futuristic, glassmorphic interface with premium whitespace.
+   * Animated, fluid chat flow with elegant typography and subtle microinteractions.
+   * Consistent theme, with elegant dark and light modes.
+   * Claude-like prompt input (floating, centered, rounded).
+   * Perplexity-style response cards (smooth fade-in, no borders, shadow glow).
+
+2. *Upgrade AI model & backend*
+
+   * Change all API calls from *Gemini 2.5 Flash → Gemini 2.5 Pro*.
+   * Optimize prompt requests to generate *code instantly* (streaming enabled).
+   * Add a lightweight *loading skeleton* animation for better perceived speed.
+   * Use temperature: 0.3 and max_output_tokens: 2048 for high-quality, concise code.
+
+3. *Improve code generation behavior*
+
+   * Generated code should contain *only essential inline comments*, not verbose explanations.
+   * Add a *“Explain this code”* button beside the output, which triggers a new request for explanation if the user wants it.
+   * Ensure *output quality → best case implementation*, not minimal examples.
+
+4. *Fix and enhance regenerate feature*
+
+   * Fix non-working “Regenerate” button (re-run last prompt).
+   * Add spinner animation on regenerate.
+   * Add a short toast “Regenerating response...”.
+
+5. *Add “Copy Prompt” feature*
+
+   * Next to “Send” or “Regenerate”, add a *“Copy Prompt”* button.
+   * Copies the user’s last input to clipboard with toast: “Prompt copied to clipboard”.
+
+6. *Performance Optimizations*
+
+   * Use streaming responses (if not already).
+   * Preload Gemini API on startup for reduced latency.
+   * Code-split and lazy-load Monaco Editor.
+   * Use memoization for heavy components.
+
+7. *UI/UX Feature Parity*
+
+   * Sidebar for history (Claude style).
+   * Smooth “new chat” flow.
+   * Animated conversation bubbles.
+   * Floating settings button (theme toggle, model info, about).
+
+---
+
+## 🎨 Design System Requirements
+
+| Element              | Style                                                                                                                                     |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| *Font*             | Inter / Satoshi / Geist                                                                                                                   |
+| *Primary Color*    | Electric Blue #3B82F6                                                                                                                   |
+| *Accent Gradient*  | from-[#3B82F6] to-[#60A5FA]                                                                                                             |
+| *Dark Background*  | #0B0F19 with 10% translucency glass panels                                                                                              |
+| *Light Background* | #F8FAFC with border-[rgba(0,0,0,0.05)]                                                                                                |
+| *Glass Cards*      | bg-[rgba(255,255,255,0.05)] backdrop-blur-xl border border-[rgba(255,255,255,0.08)] rounded-2xl shadow-[0_0_15px_rgba(59,130,246,0.15)] |
+| *Button Style*     | Rounded-2xl, hover glow, transition-all duration-200                                                                                    |
+| *Animation*        | Framer Motion transitions for chat, buttons, loading                                                                                      |
+
+---
+
+## ⚙ Functional Enhancements to Implement
+
+* ✅ *Upgrade AI endpoint*: model: "gemini-2.5-pro".
+* ✅ *Add “Explain code” button* → triggers /explain with current output.
+* ✅ *Fix “Regenerate”* → calls /generate again with previous input.
+* ✅ *Add “Copy Prompt”* button → copies user input.
+* ✅ *Add “Copy Output”* button → copies code response.
+* ✅ *Improve Zustand store* for storing last prompt and output.
+* ✅ *Add optional “New Chat” button* resetting state.
+* ✅ *Ensure mobile responsiveness* with clean stacking (no overflow).
+* ✅ *Auto-scroll to bottom on response stream.*
+* ✅ **Use react-hot-toast** for success/error feedback.
+* ✅ *Add skeleton loaders* for both input and output.
+
+---
+
+## 🧩 Acceptance Criteria
+
+* UI visually matches *Claude/Perplexity*: minimalist, modern, fluid.
+* *Gemini 2.5 Pro* integrated and functional.
+* Generation *2× faster* (streaming enabled).
+* Code *clean, minimal comments*, “Explain” optional.
+* “Regenerate” button fully working.
+* “Copy Prompt” + “Copy Code” both functional.
+* No broken styles, responsive layout on all screens.
+* All text accessible (WCAG AA contrast).
+
+---
+
+## 📦 Deliverables (Replit AI must produce)
+
+1. Updated *Next.js* components and styles with Tailwind + Framer Motion.
+2. Updated API client to use *Gemini 2.5 Pro*.
+3. Fixed “Regenerate” logic in Zustand + UI.
+4. Added “Copy Prompt” & “Explain” buttons.
+5. New design tokens in tailwind.config.ts.
+6. Updated README with new features.
+7. Optional: Figma export PNG of final design.
+
+---
+
+## 🧠 Development Guidelines for Replit AI
+
+* Treat this as a *real product redesign*, not minor tweaks.
+* Make opinionated design choices inspired by *Claude.ai, **Perplexity.ai, and **Grok*.
+* Keep everything responsive, animated, and glassy.
+* Show modern UX patterns (rounded corners, blur, floating inputs, minimal noise).
+* Output all modified code files with clear paths and descriptions.
+* Do *not* add extra comments inside code outputs (keep minimal).
+* Summarize final changes in ≤10 lines.
+
+---
+
+## 💬 Example Design References
+
+* *Claude (Anthropic)* → floating input, full-bleed chat, minimal color palette.
+* *Perplexity* → left sidebar, gradient accents, rich output cards.
+* *Grok (xAI)* → bold typography + sleek dark glass.
+
+---

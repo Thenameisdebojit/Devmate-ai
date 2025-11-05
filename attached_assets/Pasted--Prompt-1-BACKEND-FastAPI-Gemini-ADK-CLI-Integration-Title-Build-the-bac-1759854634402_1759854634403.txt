@@ -1,0 +1,188 @@
+---
+
+## 🧩 *Prompt 1 — BACKEND (FastAPI + Gemini ADK/CLI Integration)*
+
+*Title:*
+
+> 🔧 Build the backend for “Devmate” — a Gemini-powered AI coding assistant
+
+*Prompt for Replit AI:*
+
+---
+
+You are an expert Python backend engineer.
+Build a *FastAPI backend* for *Devmate, a **domain-specific AI coding support agent* powered by *Gemini CLI / ADK*.
+
+---
+
+### 🧠 Requirements
+
+*Core functionality:*
+
+* Receive user prompts via REST API
+* Generate or explain code using Gemini models (via ADK / CLI)
+* Switch between domain contexts (“Web Dev”, “ML”, “Data Science”, “Backend”)
+* Return structured JSON responses { "output": "...", "type": "code/explanation", "domain": "..." }
+
+*Stack:*
+
+* FastAPI
+* Uvicorn
+* Gemini ADK & Gemini CLI
+  (pip install google-generativeai google-ai-agent-sdk)
+* CORS middleware enabled for frontend
+
+---
+
+### ⚙ API Endpoints
+
+| Endpoint         | Method | Description                          |
+| ---------------- | ------ | ------------------------------------ |
+| /generate      | POST   | Generates new code based on prompt   |
+| /explain       | POST   | Explains provided code snippet       |
+| /switch-domain | POST   | Switches agent domain (sets context) |
+| /health        | GET    | Returns “OK” if server running       |
+
+---
+
+### 🧩 File Structure
+
+
+backend/
+├── main.py
+├── agent.py
+├── config/
+│   └── agent.yaml
+├── logs/
+│   └── gemini.log
+├── requirements.txt
+└── README.md
+
+
+---
+
+### 📜 agent.yaml (store in config/agent.yaml)
+
+yaml
+name: devmate
+tools:
+  - type: code
+prompts:
+  - role: system
+    content: >
+      You are Devmate, an AI coding support agent powered by Gemini.
+      You specialize in writing, explaining, and optimizing Python, JS, and ML code.
+
+
+---
+
+### 💻 agent.py
+
+python
+import google.generativeai as genai
+from google.ai.generativelanguage import AgentsClient
+
+genai.configure(api_key="YOUR_GEMINI_API_KEY")
+
+class DevmateAgent:
+    def __init__(self):
+        self.client = AgentsClient.create_agent(
+            display_name="Devmate",
+            instructions="You are a helpful code generation and explanation agent."
+        )
+        self.domain = "General"
+
+    def set_domain(self, domain: str):
+        self.domain = domain
+
+    def generate_code(self, prompt: str):
+        model = genai.GenerativeModel("gemini-1.5-pro")
+        domain_context = f"[Domain: {self.domain}] Generate code for:\n"
+        response = model.generate_content(domain_context + prompt)
+        return response.text
+
+    def explain_code(self, code: str):
+        model = genai.GenerativeModel("gemini-1.5-pro")
+        response = model.generate_content(f"Explain this code step by step:\n{code}")
+        return response.text
+
+
+---
+
+### ⚡ main.py
+
+python
+from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
+from agent import DevmateAgent
+
+app = FastAPI()
+agent = DevmateAgent()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"]
+)
+
+@app.get("/health")
+async def health_check():
+    return {"status": "ok"}
+
+@app.post("/generate")
+async def generate(request: Request):
+    data = await request.json()
+    prompt = data.get("prompt", "")
+    result = agent.generate_code(prompt)
+    return {"output": result, "type": "code", "domain": agent.domain}
+
+@app.post("/explain")
+async def explain(request: Request):
+    data = await request.json()
+    code = data.get("code", "")
+    explanation = agent.explain_code(code)
+    return {"output": explanation, "type": "explanation", "domain": agent.domain}
+
+@app.post("/switch-domain")
+async def switch_domain(request: Request):
+    data = await request.json()
+    domain = data.get("domain", "General")
+    agent.set_domain(domain)
+    return {"message": f"Domain switched to {domain}"}
+
+
+---
+
+### 📦 requirements.txt
+
+
+fastapi
+uvicorn
+google-generativeai
+google-ai-agent-sdk
+python-dotenv
+
+
+---
+
+### 🧪 Run Instructions
+
+bash
+pip install -r requirements.txt
+uvicorn main:app --reload
+
+
+✅ Test endpoints using Postman or curl before moving to frontend.
+
+---
+
+### ✅ Deliverables
+
+* Fully working backend with endpoints
+* Gemini ADK and CLI usage in code
+* Domain switching logic
+* CORS enabled
+* Ready to deploy on Replit or Render
+
+---

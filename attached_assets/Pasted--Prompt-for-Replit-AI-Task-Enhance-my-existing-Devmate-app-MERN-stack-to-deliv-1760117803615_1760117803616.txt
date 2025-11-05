@@ -1,0 +1,126 @@
+---
+
+🧠 Prompt for Replit AI:
+
+> 🧑‍💻 Task:
+> Enhance my existing Devmate app (MERN stack) to deliver a ChatGPT-like UI/UX and settings system, while improving performance and adding advanced new features.
+>
+> ---
+>
+> ### 🎨 UI/UX Enhancements
+>
+> 1. Rebuild the Settings panel to look and behave exactly like ChatGPT’s settings:
+>
+>    * Add expandable sections with icons and toggles for:
+>
+>      * 🧩 General
+>      * 🎨 Personalization
+>      * 🔔 Notifications
+>      * 🧠 Data Controls
+>      * 🔒 Security
+>      * 👤 My Account
+>      * 🧑‍👧‍👦 Parental Controls
+>    * Use smooth animations and rounded-card UI (Tailwind + Framer Motion).
+>    * Add dark/light mode toggle inside settings.
+>    * Settings should open from a modal or dropdown when clicking the user avatar/name (e.g., “Debojit Mishra”) in the top-right corner — similar to ChatGPT.
+>
+> 2. Add “User Guide” and “Logout” options at the bottom of the settings modal/dropdown.
+>
+> 3. Optimize light mode visibility — improve contrast, add clean pastel accent colors, soft shadows, and readable text (fix previous low-contrast issue).
+>
+> 4. Add an attach-file feature (+ symbol) beside the search or prompt input bar:
+>
+>    * Allow users to upload images or folders for analysis (store temporarily on backend or Firebase).
+>    * Add visual feedback (file name preview and remove option).
+>    * Enable image preview and ensure the backend can process it for analysis (just like ChatGPT’s image input).
+>
+> 5. Optimize performance:
+>
+>    * Minimize loading times (lazy load large components).
+>    * Add a subtle animated skeleton loader or spinner during model response generation.
+>    * Cache user session and previous chat states efficiently.
+>
+> 6. Keep UI consistent with ChatGPT’s modern look:
+>
+>    * Floating rounded sidebar with glassmorphism background.
+>    * Responsive design for both desktop and mobile.
+>    * Add elegant transitions between chat, code output, and settings.
+>
+> ---
+>
+> ### 🧰 Backend & Functional Enhancements
+>
+> 1. Implement user authentication system (already present, but refine):
+>
+>    * Use JWT-based login/signup with bcrypt password hashing.
+>    * Allow users to edit profile details in the “My Account” section.
+>    * Store user details, preferences, and settings in MongoDB (e.g., theme preference, notifications, parental control).
+>
+> 2. Implement a “User Settings” API:
+>
+>    * GET /api/settings/:userId → fetch settings
+>    * PUT /api/settings/:userId → update settings
+>    * Use Mongoose schema for settings preferences.
+>
+> 3. Add data persistence for chat history, uploaded files, and personalization settings (save per user).
+>
+> 4. Integrate file analysis backend endpoint:
+>
+>    * /api/analyze to handle image/folder uploads (use multer for file parsing).
+>    * Placeholder logic for image analysis (to be integrated with Gemini or OpenAI Vision APIs later).
+>
+> ---
+>
+> ### ⚙ Performance Optimization
+>
+> * Enable React lazy loading for large components like Settings, CodeOutput, and ChatInterface.
+> * Use memoization (React.memo, useMemo) to reduce re-renders.
+> * Compress static assets and images.
+> * Add a loading progress bar at the top (similar to Next.js or ChatGPT loading line).
+>
+> ---
+>
+> ### 🌗 Dark/Light Mode Implementation
+>
+> * Use Tailwind dark mode with system detection (darkMode: 'class').
+> * Store user’s theme preference in MongoDB and persist via localStorage.
+> * Smooth animated transition between modes (Framer Motion).
+>
+> ---
+>
+> ### 🧩 Tech Stack Notes
+>
+> * Frontend: React + TailwindCSS + Framer Motion + Context API (for settings and theme state).
+> * Backend: Node.js + Express + MongoDB (Mongoose) + Multer (for file uploads) + JWT Auth.
+> * Database: MongoDB Atlas.
+> * Optional file storage: Firebase Storage or Cloudinary.
+>
+> ---
+>
+> ### 🎯 Goals
+>
+> * Deliver a ChatGPT-grade user experience with full-featured settings, theme toggle, and responsive performance.
+> * Fix sidebar scroll issue — make sidebar fixed while only the main content scrolls.
+> * Ensure all new UI elements are visually aligned with ChatGPT’s design system (glassmorphism + minimal shadows + clean typography).
+>
+> ---
+>
+> ⚡ End Result Expected:
+>
+> * A visually enhanced, responsive Devmate app UI/UX/CX.
+> * A functional settings modal like ChatGPT’s.
+> * Light & dark mode toggle.
+> * Fixed sidebar.
+> * File/image upload for analysis.
+> * Faster page load and smooth transitions.
+>
+> ---
+>
+> 🧾 Deliverables:
+>
+> * Updated frontend (React components and styling).
+> * Updated backend routes for user settings & file uploads.
+> * MongoDB models for user and settings.
+> * Final working prototype deployable on Replit.
+
+---

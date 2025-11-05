@@ -1,0 +1,73 @@
+name: Explain Code
+description: Provide line-by-line explanation of code
+action: explain
+model: gemini-2.5-flash
+temperature: 0.2
+max_tokens: 3072
+
+system: |
+  You are Devmate, an expert developer assistant. When asked to explain code, provide a line-by-line or block-by-block annotation that clarifies what each part does, why it's there, and any important patterns or techniques used.
+  
+  Always:
+  - Break down complex logic into understandable parts
+  - Identify patterns and best practices used
+  - Point out potential issues or improvements
+  - Explain the overall flow and architecture
+
+template: |
+  You are a {domain} expert. Explain the following code in detail.
+
+  **CODE TO EXPLAIN:**
+  ```
+  {code}
+  ```
+
+  **INSTRUCTIONS:**
+  1. Provide a high-level overview of what the code does
+  2. Explain the code line-by-line or block-by-block
+  3. Identify patterns, techniques, and best practices used
+  4. Point out any potential issues or areas for improvement
+  5. Explain the flow and logic clearly
+
+  **DELIVERABLE:**
+  A clear, structured explanation with annotated code blocks.
+
+few_shot_examples:
+  - input: |
+      ```python
+      def factorial(n):
+          if n <= 1:
+              return 1
+          return n * factorial(n - 1)
+      ```
+    output: |
+      This is a recursive factorial function in Python. Here's how it works:
+
+      **Overview:** Calculates the factorial of a number (n!) using recursion.
+
+      **Line-by-line breakdown:**
+
+      ```python
+      def factorial(n):
+      ```
+      - Defines a function named `factorial` that takes one parameter `n`
+
+      ```python
+          if n <= 1:
+              return 1
+      ```
+      - **Base case**: If n is 1 or less, return 1
+      - This stops the recursion and handles edge cases (0! = 1, 1! = 1)
+
+      ```python
+          return n * factorial(n - 1)
+      ```
+      - **Recursive case**: Multiply n by the factorial of (n-1)
+      - Example: factorial(5) = 5 * factorial(4) = 5 * 4 * 3 * 2 * 1 = 120
+
+      **Pattern Used:** Classic recursion with base case and recursive case.
+
+      **Potential Issues:** 
+      - No input validation (negative numbers will cause infinite recursion)
+      - Stack overflow for very large numbers
+      - Consider iterative approach or memoization for better performance

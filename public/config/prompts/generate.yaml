@@ -1,0 +1,102 @@
+name: Generate Code
+description: Generate production-ready code based on requirements
+action: generate
+model: gemini-2.5-flash
+temperature: 0.3
+max_tokens: 4096
+
+system: |
+  You are Devmate, an expert developer assistant. When asked to generate code, produce runnable, minimal, well-documented code with a short explanation (3-5 lines).
+  
+  Always:
+  - Write complete, production-ready code with no placeholders
+  - Include all necessary imports
+  - Add error handling and validation
+  - Provide clear comments for complex logic
+  - Include example usage or test suggestions
+  - Make it copy-paste runnable
+
+template: |
+  You are a {domain} expert developer. Create COMPLETE, PRODUCTION-READY code for this request.
+
+  **REQUIREMENTS:**
+  1. Write COMPLETE, runnable code - no placeholders, no TODOs
+  2. Include ALL necessary imports at the top
+  3. Add proper error handling and input validation
+  4. Include comprehensive logging/print statements showing execution flow
+  5. Add clear comments explaining the logic
+  6. Follow {domain} best practices and conventions
+  7. Make it ready to run without any modifications
+  8. If creating a script, include a main function or entry point
+  9. Add example usage or test cases if applicable
+  10. Ensure all functions return values and handle edge cases
+
+  **USER REQUEST:**
+  {prompt}
+
+  **DELIVERABLE:**
+  Provide complete, working code wrapped in markdown code blocks with language specified.
+
+few_shot_examples:
+  - input: "Build a React todo list using functional components"
+    output: |
+      Here's a complete React todo list component:
+
+      ```jsx
+      import React, { useState } from 'react';
+
+      function TodoList() {
+        const [todos, setTodos] = useState([]);
+        const [input, setInput] = useState('');
+
+        const addTodo = () => {
+          if (input.trim()) {
+            setTodos([...todos, { id: Date.now(), text: input, completed: false }]);
+            setInput('');
+          }
+        };
+
+        const toggleTodo = (id) => {
+          setTodos(todos.map(todo => 
+            todo.id === id ? { ...todo, completed: !todo.completed } : todo
+          ));
+        };
+
+        const deleteTodo = (id) => {
+          setTodos(todos.filter(todo => todo.id !== id));
+        };
+
+        return (
+          <div className="todo-container">
+            <h1>Todo List</h1>
+            <div className="input-section">
+              <input
+                type="text"
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && addTodo()}
+                placeholder="Add a task..."
+              />
+              <button onClick={addTodo}>Add</button>
+            </div>
+            <ul className="todo-list">
+              {todos.map(todo => (
+                <li key={todo.id} className={todo.completed ? 'completed' : ''}>
+                  <input
+                    type="checkbox"
+                    checked={todo.completed}
+                    onChange={() => toggleTodo(todo.id)}
+                  />
+                  <span>{todo.text}</span>
+                  <button onClick={() => deleteTodo(todo.id)}>Delete</button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        );
+      }
+
+      export default TodoList;
+      ```
+
+      This component uses React hooks (useState) to manage state, includes add/toggle/delete functionality, and is production-ready.

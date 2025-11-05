@@ -1,0 +1,72 @@
+You are a professional full-stack developer and UI/UX designer. 
+Upgrade my existing "Devmate v2.0 – Powered by Gemini Pro" app into a professional, fully responsive, and user-friendly platform similar to ChatGPT in both design and usability.
+
+### 🎯 Goals
+1. **Responsive Design & Cross-Platform Compatibility**
+   - Make the entire app layout fully responsive on all screen sizes (desktop, tablet, mobile).
+   - Ensure smooth scaling of text, icons, chat containers, and sidebar.
+   - Use flexible grid/flex layouts with TailwindCSS for perfect alignment.
+   - Fix overflow, padding, and layout stretching issues on smaller viewports.
+
+2. **Modern Welcome & Onboarding Page**
+   - Add a **dedicated Welcome Page** before login:
+     - “Welcome to Devmate – Your AI-Powered Coding Assistant.”
+     - Include a brief description: “Generate, debug, and explain code with AI assistance powered by Gemini Pro.”
+     - Attractive gradient background with subtle animations.
+     - Prominent “Get Started” or “Sign In / Sign Up” button.
+     - Simple logo or brand icon at the top center.
+   - Optionally add a “Learn More” section explaining features.
+
+3. **User Guidance & In-App Instructions**
+   - Show a short onboarding guide (modal or tooltip) for new users:
+     - How to start a conversation.
+     - How to view chat history.
+     - How to manage settings and logout.
+   - Add contextual tooltips on icons (copy, download, delete, theme toggle).
+   - Add a small “?” Help icon that opens a quick guide modal.
+
+4. **Dashboard & Chat UI Enhancements**
+   - Create a **beautiful unified layout** similar to ChatGPT:
+     - Sidebar with “New Chat”, “History”, “Profile”, “Settings”, and “Logout”.
+     - Main chat area with message bubbles (user vs. AI styled distinctly).
+     - AI responses in elegant code blocks with syntax highlighting.
+   - Add subtle glow/hover effects and shadows to cards and buttons.
+   - Smooth transitions between login, chat, and settings views.
+
+5. **Improved Authentication Flow**
+   - Integrate Firebase or JWT Auth (if not already done).
+   - Keep users logged in with session persistence.
+   - Show user profile card in sidebar after login.
+   - Add proper error and success alerts for signup/login/logout.
+
+6. **Global UI/UX Enhancements**
+   - Use TailwindCSS with modern design system.
+   - Add gradient buttons, rounded corners (2xl), glassmorphism-style cards.
+   - Add smooth animations using Framer Motion or Tailwind transitions.
+   - Include theme toggle (Light/Dark mode) in top-right corner.
+   - Ensure color contrast and text visibility in both modes.
+
+7. **New “Guide” Section (Optional)**
+   - Add a “User Guide” or “Docs” page accessible from sidebar.
+   - Include sections:
+     - “How to Start a Chat”
+     - “Saving & Viewing History”
+     - “Using AI Actions”
+     - “Customizing Appearance”
+
+### ⚙️ Tech Stack
+- **Frontend:** React + TailwindCSS + Framer Motion
+- **Backend:** Node.js + Express (JWT Auth)
+- **Database:** MongoDB or Firebase (for users, chats, settings)
+- **Auth:** Firebase Auth / JWT-based auth
+- **Deployment:** Replit full-stack compatible structure
+
+### 🧩 Deliverables
+- Fully responsive, modern UI (ChatGPT-like).
+- Clear, guided onboarding flow and welcome page.
+- Persistent user sessions and chat history.
+- Modular React components (`WelcomePage`, `ChatArea`, `Sidebar`, `GuideModal`, `SettingsPanel`).
+- Light/Dark mode with consistent theming.
+- Clean folder structure ready for production.
+
+Ensure a polished and intuitive user experience across both web and app views — the UI should look *professional, balanced, and visually delightful*.

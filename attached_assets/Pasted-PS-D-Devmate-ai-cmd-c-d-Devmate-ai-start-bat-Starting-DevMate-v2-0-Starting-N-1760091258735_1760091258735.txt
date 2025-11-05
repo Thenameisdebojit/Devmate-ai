@@ -1,0 +1,289 @@
+PS D:\Devmate-ai> cmd /c "d:\Devmate-ai\start.bat"
+≡ƒÜÇ Starting DevMate v2.0...
+
+≡ƒîÉ Starting Next.js server on port 5000...
+
+> devmate@2.0.0 dev
+> next dev -p 5000 -H 0.0.0.0
+
+  ▲ Next.js 14.2.33
+  - Local:        http://localhost:5000
+  - Network:      http://0.0.0.0:5000
+  - Environments: .env.local
+
+ ✓ Starting...
+ ✓ Ready in 2.8s
+ ○ Compiling / ...
+ ✓ Compiled / in 10.1s (1365 modules)
+ GET / 200 in 10806ms
+ ✓ Compiled in 778ms (686 modules)
+ ○ Compiling /api/health ...
+ ✓ Compiled /api/health in 5.1s (779 modules)
+ ✓ Compiled (781 modules)
+ GET /api/health 200 in 5392ms
+ ⨯ lib\mongodb.ts (6:9) @ eval
+ ⨯ Error: Please define the MONGODB_URI environment variable
+    at eval (webpack-internal:///(rsc)/./lib/mongodb.ts:10:11)
+    at (rsc)/./lib/mongodb.ts (D:\Devmate-ai\.next\server\app\api\auth\me\route.js:122:1)
+    at __webpack_require__ (D:\Devmate-ai\.next\server\webpack-runtime.js:33:42)
+    at eval (webpack-internal:///(rsc)/./app/api/auth/me/route.ts:6:70)
+    at (rsc)/./app/api/auth/me/route.ts (D:\Devmate-ai\.next\server\app\api\auth\me\route.js:102:1)  
+    at __webpack_require__ (D:\Devmate-ai\.next\server\webpack-runtime.js:33:42)
+    at eval (webpack-internal:///(rsc)/./node_modules/next/dist/build/webpack/loaders/next-app-loader.js?name=app%2Fapi%2Fauth%2Fme%2Froute&page=%2Fapi%2Fauth%2Fme%2Froute&appPaths=&pagePath=private-next-app-dir%2Fapi%2Fauth%2Fme%2Froute.ts&appDir=D%3A%5CDevmate-ai%5Capp&pageExtensions=tsx&pageExtensions=ts&pageExtensions=jsx&pageExtensions=js&rootDir=D%3A%5CDevmate-ai&isDev=true&tsconfigPath=tsconfig.json&basePath=&assetPrefix=&nextConfigOutput=&preferredRegion=&middlewareConfig=e30%3D!:15:95)      
+    at (rsc)/./node_modules/next/dist/build/webpack/loaders/next-app-loader.js?name=app%2Fapi%2Fauth%2Fme%2Froute&page=%2Fapi%2Fauth%2Fme%2Froute&appPaths=&pagePath=private-next-app-dir%2Fapi%2Fauth%2Fme%2Froute.ts&appDir=D%3A%5CDevmate-ai%5Capp&pageExtensions=tsx&pageExtensions=ts&pageExtensions=jsx&pageExtensions=js&rootDir=D%3A%5CDevmate-ai&isDev=true&tsconfigPath=tsconfig.json&basePath=&assetPrefix=&nextConfigOutput=&preferredRegion=&middlewareConfig=e30%3D! (D:\Devmate-ai\.next\server\app\api\auth\me\route.js:92:1)
+    at __webpack_require__ (D:\Devmate-ai\.next\server\webpack-runtime.js:33:42)
+    at __webpack_exec__ (D:\Devmate-ai\.next\server\app\api\auth\me\route.js:142:39)
+    at D:\Devmate-ai\.next\server\app\api\auth\me\route.js:143:129
+    at __webpack_require__.X (D:\Devmate-ai\.next\server\webpack-runtime.js:168:21)
+    at D:\Devmate-ai\.next\server\app\api\auth\me\route.js:143:47
+    at Object.<anonymous> (D:\Devmate-ai\.next\server\app\api\auth\me\route.js:146:3)
+    at Module._compile (node:internal/modules/cjs/loader:1760:14)
+    at Object..js (node:internal/modules/cjs/loader:1893:10)
+    at Module.load (node:internal/modules/cjs/loader:1480:32)
+    at Module._load (node:internal/modules/cjs/loader:1299:12)
+    at TracingChannel.traceSync (node:diagnostics_channel:322:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:244:24)
+    at Module.<anonymous> (node:internal/modules/cjs/loader:1503:12)
+    at mod.require (D:\Devmate-ai\node_modules\next\dist\server\require-hook.js:65:28)
+    at require (node:internal/modules/helpers:152:16)
+    at requirePage (D:\Devmate-ai\node_modules\next\dist\server\require.js:109:84)
+    at D:\Devmate-ai\node_modules\next\dist\server\load-components.js:103:84
+    at async loadComponentsImpl (D:\Devmate-ai\node_modules\next\dist\server\load-components.js:103:26)
+    at async DevServer.findPageComponentsImpl (D:\Devmate-ai\node_modules\next\dist\server\next-server.js:714:36)
+    at async DevServer.findPageComponents (D:\Devmate-ai\node_modules\next\dist\server\dev\next-dev-server.js:577:20)
+    at async DevServer.renderPageComponent (D:\Devmate-ai\node_modules\next\dist\server\base-server.js:1910:24)
+    at async DevServer.renderToResponseImpl (D:\Devmate-ai\node_modules\next\dist\server\base-server.js:1962:32)
+    at async DevServer.pipeImpl (D:\Devmate-ai\node_modules\next\dist\server\base-server.js:922:25)  
+    at async NextNodeServer.handleCatchallRenderRequest (D:\Devmate-ai\node_modules\next\dist\server\next-server.js:272:17)
+    at async DevServer.handleRequestImpl (D:\Devmate-ai\node_modules\next\dist\server\base-server.js:818:17)
+    at async D:\Devmate-ai\node_modules\next\dist\server\dev\next-dev-server.js:339:20
+    at async Span.traceAsyncFn (D:\Devmate-ai\node_modules\next\dist\trace\trace.js:154:20)
+    at async DevServer.handleRequest (D:\Devmate-ai\node_modules\next\dist\server\dev\next-dev-server.js:336:24)
+    at async invokeRender (D:\Devmate-ai\node_modules\next\dist\server\lib\router-server.js:179:21)  
+    at async handleRequest (D:\Devmate-ai\node_modules\next\dist\server\lib\router-server.js:359:24) 
+    at async requestHandlerImpl (D:\Devmate-ai\node_modules\next\dist\server\lib\router-server.js:383:13)
+    at async Server.requestListener (D:\Devmate-ai\node_modules\next\dist\server\lib\start-server.js:141:13) {
+  page: '/api/auth/me'
+}
+  4 |
+  5 | if (!MONGODB_URI) {
+> 6 |   throw new Error('Please define the MONGODB_URI environment variable')
+    |         ^
+  7 | }
+  8 |
+  9 | interface CachedConnection {
+ GET /api/health 200 in 58ms
+ GET /api/health 200 in 19ms
+ GET /api/health 200 in 11ms
+ ○ Compiling /_error ...
+ ✓ Compiled /_error in 2.2s (1680 modules)
+ GET /api/auth/me 500 in 8920ms
+ ⨯ lib\mongodb.ts (6:9) @ eval
+ ⨯ Error: Please define the MONGODB_URI environment variable
+    at eval (webpack-internal:///(rsc)/./lib/mongodb.ts:10:11)
+    at (rsc)/./lib/mongodb.ts (D:\Devmate-ai\.next\server\app\api\auth\me\route.js:122:1)
+    at __webpack_require__ (D:\Devmate-ai\.next\server\webpack-runtime.js:33:42)
+    at eval (webpack-internal:///(rsc)/./app/api/auth/me/route.ts:6:70)
+    at (rsc)/./app/api/auth/me/route.ts (D:\Devmate-ai\.next\server\app\api\auth\me\route.js:102:1)  
+    at __webpack_require__ (D:\Devmate-ai\.next\server\webpack-runtime.js:33:42)
+    at eval (webpack-internal:///(rsc)/./node_modules/next/dist/build/webpack/loaders/next-app-loader.js?name=app%2Fapi%2Fauth%2Fme%2Froute&page=%2Fapi%2Fauth%2Fme%2Froute&appPaths=&pagePath=private-next-app-dir%2Fapi%2Fauth%2Fme%2Froute.ts&appDir=D%3A%5CDevmate-ai%5Capp&pageExtensions=tsx&pageExtensions=ts&pageExtensions=jsx&pageExtensions=js&rootDir=D%3A%5CDevmate-ai&isDev=true&tsconfigPath=tsconfig.json&basePath=&assetPrefix=&nextConfigOutput=&preferredRegion=&middlewareConfig=e30%3D!:15:95)      
+    at (rsc)/./node_modules/next/dist/build/webpack/loaders/next-app-loader.js?name=app%2Fapi%2Fauth%2Fme%2Froute&page=%2Fapi%2Fauth%2Fme%2Froute&appPaths=&pagePath=private-next-app-dir%2Fapi%2Fauth%2Fme%2Froute.ts&appDir=D%3A%5CDevmate-ai%5Capp&pageExtensions=tsx&pageExtensions=ts&pageExtensions=jsx&pageExtensions=js&rootDir=D%3A%5CDevmate-ai&isDev=true&tsconfigPath=tsconfig.json&basePath=&assetPrefix=&nextConfigOutput=&preferredRegion=&middlewareConfig=e30%3D! (D:\Devmate-ai\.next\server\app\api\auth\me\route.js:92:1)
+    at __webpack_require__ (D:\Devmate-ai\.next\server\webpack-runtime.js:33:42)
+    at __webpack_exec__ (D:\Devmate-ai\.next\server\app\api\auth\me\route.js:142:39)
+    at D:\Devmate-ai\.next\server\app\api\auth\me\route.js:143:129
+    at __webpack_require__.X (D:\Devmate-ai\.next\server\webpack-runtime.js:168:21)
+    at D:\Devmate-ai\.next\server\app\api\auth\me\route.js:143:47
+    at Object.<anonymous> (D:\Devmate-ai\.next\server\app\api\auth\me\route.js:146:3)
+    at Module._compile (node:internal/modules/cjs/loader:1760:14)
+    at Object..js (node:internal/modules/cjs/loader:1893:10)
+    at Module.load (node:internal/modules/cjs/loader:1480:32)
+    at Module._load (node:internal/modules/cjs/loader:1299:12)
+    at TracingChannel.traceSync (node:diagnostics_channel:322:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:244:24)
+    at Module.<anonymous> (node:internal/modules/cjs/loader:1503:12)
+    at mod.require (D:\Devmate-ai\node_modules\next\dist\server\require-hook.js:65:28)
+    at require (node:internal/modules/helpers:152:16)
+    at requirePage (D:\Devmate-ai\node_modules\next\dist\server\require.js:109:84)
+    at D:\Devmate-ai\node_modules\next\dist\server\load-components.js:103:84
+    at async loadComponentsImpl (D:\Devmate-ai\node_modules\next\dist\server\load-components.js:103:26)
+    at async DevServer.findPageComponentsImpl (D:\Devmate-ai\node_modules\next\dist\server\next-server.js:714:36)
+    at async DevServer.findPageComponents (D:\Devmate-ai\node_modules\next\dist\server\dev\next-dev-server.js:577:20)
+    at async DevServer.renderPageComponent (D:\Devmate-ai\node_modules\next\dist\server\base-server.js:1910:24)
+    at async DevServer.renderToResponseImpl (D:\Devmate-ai\node_modules\next\dist\server\base-server.js:1962:32)
+    at async DevServer.pipeImpl (D:\Devmate-ai\node_modules\next\dist\server\base-server.js:922:25)  
+    at async NextNodeServer.handleCatchallRenderRequest (D:\Devmate-ai\node_modules\next\dist\server\next-server.js:272:17)
+    at async DevServer.handleRequestImpl (D:\Devmate-ai\node_modules\next\dist\server\base-server.js:818:17)
+    at async D:\Devmate-ai\node_modules\next\dist\server\dev\next-dev-server.js:339:20
+    at async Span.traceAsyncFn (D:\Devmate-ai\node_modules\next\dist\trace\trace.js:154:20)
+    at async DevServer.handleRequest (D:\Devmate-ai\node_modules\next\dist\server\dev\next-dev-server.js:336:24)
+    at async invokeRender (D:\Devmate-ai\node_modules\next\dist\server\lib\router-server.js:179:21)  
+    at async handleRequest (D:\Devmate-ai\node_modules\next\dist\server\lib\router-server.js:359:24) 
+    at async requestHandlerImpl (D:\Devmate-ai\node_modules\next\dist\server\lib\router-server.js:383:13)
+    at async Server.requestListener (D:\Devmate-ai\node_modules\next\dist\server\lib\start-server.js:141:13) {
+  page: '/api/auth/me'
+}
+  4 |
+  5 | if (!MONGODB_URI) {
+> 6 |   throw new Error('Please define the MONGODB_URI environment variable')
+    |         ^
+  7 | }
+  8 |
+  9 | interface CachedConnection {
+ GET /api/auth/me 500 in 76ms
+ ⨯ lib\mongodb.ts (6:9) @ eval
+ ⨯ Error: Please define the MONGODB_URI environment variable
+    at eval (webpack-internal:///(rsc)/./lib/mongodb.ts:10:11)
+    at (rsc)/./lib/mongodb.ts (D:\Devmate-ai\.next\server\app\api\auth\me\route.js:122:1)
+    at __webpack_require__ (D:\Devmate-ai\.next\server\webpack-runtime.js:33:42)
+    at eval (webpack-internal:///(rsc)/./app/api/auth/me/route.ts:6:70)
+    at (rsc)/./app/api/auth/me/route.ts (D:\Devmate-ai\.next\server\app\api\auth\me\route.js:102:1)  
+    at __webpack_require__ (D:\Devmate-ai\.next\server\webpack-runtime.js:33:42)
+    at eval (webpack-internal:///(rsc)/./node_modules/next/dist/build/webpack/loaders/next-app-loader.js?name=app%2Fapi%2Fauth%2Fme%2Froute&page=%2Fapi%2Fauth%2Fme%2Froute&appPaths=&pagePath=private-next-app-dir%2Fapi%2Fauth%2Fme%2Froute.ts&appDir=D%3A%5CDevmate-ai%5Capp&pageExtensions=tsx&pageExtensions=ts&pageExtensions=jsx&pageExtensions=js&rootDir=D%3A%5CDevmate-ai&isDev=true&tsconfigPath=tsconfig.json&basePath=&assetPrefix=&nextConfigOutput=&preferredRegion=&middlewareConfig=e30%3D!:15:95)      
+    at (rsc)/./node_modules/next/dist/build/webpack/loaders/next-app-loader.js?name=app%2Fapi%2Fauth%2Fme%2Froute&page=%2Fapi%2Fauth%2Fme%2Froute&appPaths=&pagePath=private-next-app-dir%2Fapi%2Fauth%2Fme%2Froute.ts&appDir=D%3A%5CDevmate-ai%5Capp&pageExtensions=tsx&pageExtensions=ts&pageExtensions=jsx&pageExtensions=js&rootDir=D%3A%5CDevmate-ai&isDev=true&tsconfigPath=tsconfig.json&basePath=&assetPrefix=&nextConfigOutput=&preferredRegion=&middlewareConfig=e30%3D! (D:\Devmate-ai\.next\server\app\api\auth\me\route.js:92:1)
+    at __webpack_require__ (D:\Devmate-ai\.next\server\webpack-runtime.js:33:42)
+    at __webpack_exec__ (D:\Devmate-ai\.next\server\app\api\auth\me\route.js:142:39)
+    at D:\Devmate-ai\.next\server\app\api\auth\me\route.js:143:129
+    at __webpack_require__.X (D:\Devmate-ai\.next\server\webpack-runtime.js:168:21)
+    at D:\Devmate-ai\.next\server\app\api\auth\me\route.js:143:47
+    at Object.<anonymous> (D:\Devmate-ai\.next\server\app\api\auth\me\route.js:146:3)
+    at Module._compile (node:internal/modules/cjs/loader:1760:14)
+    at Object..js (node:internal/modules/cjs/loader:1893:10)
+    at Module.load (node:internal/modules/cjs/loader:1480:32)
+    at Module._load (node:internal/modules/cjs/loader:1299:12)
+    at TracingChannel.traceSync (node:diagnostics_channel:322:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:244:24)
+    at Module.<anonymous> (node:internal/modules/cjs/loader:1503:12)
+    at mod.require (D:\Devmate-ai\node_modules\next\dist\server\require-hook.js:65:28)
+    at require (node:internal/modules/helpers:152:16)
+    at requirePage (D:\Devmate-ai\node_modules\next\dist\server\require.js:109:84)
+    at D:\Devmate-ai\node_modules\next\dist\server\load-components.js:103:84
+    at async loadComponentsImpl (D:\Devmate-ai\node_modules\next\dist\server\load-components.js:103:26)
+    at async DevServer.findPageComponentsImpl (D:\Devmate-ai\node_modules\next\dist\server\next-server.js:714:36)
+    at async DevServer.findPageComponents (D:\Devmate-ai\node_modules\next\dist\server\dev\next-dev-server.js:577:20)
+    at async DevServer.renderPageComponent (D:\Devmate-ai\node_modules\next\dist\server\base-server.js:1910:24)
+    at async DevServer.renderToResponseImpl (D:\Devmate-ai\node_modules\next\dist\server\base-server.js:1962:32)
+    at async DevServer.pipeImpl (D:\Devmate-ai\node_modules\next\dist\server\base-server.js:922:25)  
+    at async NextNodeServer.handleCatchallRenderRequest (D:\Devmate-ai\node_modules\next\dist\server\next-server.js:272:17)
+    at async DevServer.handleRequestImpl (D:\Devmate-ai\node_modules\next\dist\server\base-server.js:818:17)
+    at async D:\Devmate-ai\node_modules\next\dist\server\dev\next-dev-server.js:339:20
+    at async Span.traceAsyncFn (D:\Devmate-ai\node_modules\next\dist\trace\trace.js:154:20)
+    at async DevServer.handleRequest (D:\Devmate-ai\node_modules\next\dist\server\dev\next-dev-server.js:336:24)
+    at async invokeRender (D:\Devmate-ai\node_modules\next\dist\server\lib\router-server.js:179:21)  
+    at async handleRequest (D:\Devmate-ai\node_modules\next\dist\server\lib\router-server.js:359:24) 
+    at async requestHandlerImpl (D:\Devmate-ai\node_modules\next\dist\server\lib\router-server.js:383:13)
+    at async Server.requestListener (D:\Devmate-ai\node_modules\next\dist\server\lib\start-server.js:141:13) {
+  page: '/api/auth/me'
+}
+  4 |
+  5 | if (!MONGODB_URI) {
+> 6 |   throw new Error('Please define the MONGODB_URI environment variable')
+    |         ^
+  7 | }
+  8 |
+  9 | interface CachedConnection {
+ GET /api/auth/me 500 in 34ms
+ ⨯ lib\mongodb.ts (6:9) @ eval
+ ⨯ Error: Please define the MONGODB_URI environment variable
+    at eval (webpack-internal:///(rsc)/./lib/mongodb.ts:10:11)
+    at (rsc)/./lib/mongodb.ts (D:\Devmate-ai\.next\server\app\api\auth\me\route.js:122:1)
+    at __webpack_require__ (D:\Devmate-ai\.next\server\webpack-runtime.js:33:42)
+    at eval (webpack-internal:///(rsc)/./app/api/auth/me/route.ts:6:70)
+    at (rsc)/./app/api/auth/me/route.ts (D:\Devmate-ai\.next\server\app\api\auth\me\route.js:102:1)  
+    at __webpack_require__ (D:\Devmate-ai\.next\server\webpack-runtime.js:33:42)
+    at eval (webpack-internal:///(rsc)/./node_modules/next/dist/build/webpack/loaders/next-app-loader.js?name=app%2Fapi%2Fauth%2Fme%2Froute&page=%2Fapi%2Fauth%2Fme%2Froute&appPaths=&pagePath=private-next-app-dir%2Fapi%2Fauth%2Fme%2Froute.ts&appDir=D%3A%5CDevmate-ai%5Capp&pageExtensions=tsx&pageExtensions=ts&pageExtensions=jsx&pageExtensions=js&rootDir=D%3A%5CDevmate-ai&isDev=true&tsconfigPath=tsconfig.json&basePath=&assetPrefix=&nextConfigOutput=&preferredRegion=&middlewareConfig=e30%3D!:15:95)      
+    at (rsc)/./node_modules/next/dist/build/webpack/loaders/next-app-loader.js?name=app%2Fapi%2Fauth%2Fme%2Froute&page=%2Fapi%2Fauth%2Fme%2Froute&appPaths=&pagePath=private-next-app-dir%2Fapi%2Fauth%2Fme%2Froute.ts&appDir=D%3A%5CDevmate-ai%5Capp&pageExtensions=tsx&pageExtensions=ts&pageExtensions=jsx&pageExtensions=js&rootDir=D%3A%5CDevmate-ai&isDev=true&tsconfigPath=tsconfig.json&basePath=&assetPrefix=&nextConfigOutput=&preferredRegion=&middlewareConfig=e30%3D! (D:\Devmate-ai\.next\server\app\api\auth\me\route.js:92:1)
+    at __webpack_require__ (D:\Devmate-ai\.next\server\webpack-runtime.js:33:42)
+    at __webpack_exec__ (D:\Devmate-ai\.next\server\app\api\auth\me\route.js:142:39)
+    at D:\Devmate-ai\.next\server\app\api\auth\me\route.js:143:129
+    at __webpack_require__.X (D:\Devmate-ai\.next\server\webpack-runtime.js:168:21)
+    at D:\Devmate-ai\.next\server\app\api\auth\me\route.js:143:47
+    at Object.<anonymous> (D:\Devmate-ai\.next\server\app\api\auth\me\route.js:146:3)
+    at Module._compile (node:internal/modules/cjs/loader:1760:14)
+    at Object..js (node:internal/modules/cjs/loader:1893:10)
+    at Module.load (node:internal/modules/cjs/loader:1480:32)
+    at Module._load (node:internal/modules/cjs/loader:1299:12)
+    at TracingChannel.traceSync (node:diagnostics_channel:322:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:244:24)
+    at Module.<anonymous> (node:internal/modules/cjs/loader:1503:12)
+    at mod.require (D:\Devmate-ai\node_modules\next\dist\server\require-hook.js:65:28)
+    at require (node:internal/modules/helpers:152:16)
+    at requirePage (D:\Devmate-ai\node_modules\next\dist\server\require.js:109:84)
+    at D:\Devmate-ai\node_modules\next\dist\server\load-components.js:103:84
+    at async loadComponentsImpl (D:\Devmate-ai\node_modules\next\dist\server\load-components.js:103:26)
+    at async DevServer.findPageComponentsImpl (D:\Devmate-ai\node_modules\next\dist\server\next-server.js:714:36)
+    at async DevServer.findPageComponents (D:\Devmate-ai\node_modules\next\dist\server\dev\next-dev-server.js:577:20)
+    at async DevServer.renderPageComponent (D:\Devmate-ai\node_modules\next\dist\server\base-server.js:1910:24)
+    at async DevServer.renderToResponseImpl (D:\Devmate-ai\node_modules\next\dist\server\base-server.js:1962:32)
+    at async DevServer.pipeImpl (D:\Devmate-ai\node_modules\next\dist\server\base-server.js:922:25)  
+    at async NextNodeServer.handleCatchallRenderRequest (D:\Devmate-ai\node_modules\next\dist\server\next-server.js:272:17)
+    at async DevServer.handleRequestImpl (D:\Devmate-ai\node_modules\next\dist\server\base-server.js:818:17)
+    at async D:\Devmate-ai\node_modules\next\dist\server\dev\next-dev-server.js:339:20
+    at async Span.traceAsyncFn (D:\Devmate-ai\node_modules\next\dist\trace\trace.js:154:20)
+    at async DevServer.handleRequest (D:\Devmate-ai\node_modules\next\dist\server\dev\next-dev-server.js:336:24)
+    at async invokeRender (D:\Devmate-ai\node_modules\next\dist\server\lib\router-server.js:179:21)  
+    at async handleRequest (D:\Devmate-ai\node_modules\next\dist\server\lib\router-server.js:359:24) 
+    at async requestHandlerImpl (D:\Devmate-ai\node_modules\next\dist\server\lib\router-server.js:383:13)
+    at async Server.requestListener (D:\Devmate-ai\node_modules\next\dist\server\lib\start-server.js:141:13) {
+  page: '/api/auth/me'
+}
+  4 |
+  5 | if (!MONGODB_URI) {
+> 6 |   throw new Error('Please define the MONGODB_URI environment variable')
+    |         ^
+  7 | }
+  8 |
+  9 | interface CachedConnection {
+ GET /api/auth/me 500 in 24ms
+ ✓ Compiled /api/auth/login in 263ms (824 modules)
+ ⨯ lib\mongodb.ts (6:9) @ eval
+ ⨯ Error: Please define the MONGODB_URI environment variable
+    at eval (webpack-internal:///(rsc)/./lib/mongodb.ts:10:11)
+    at (rsc)/./lib/mongodb.ts (D:\Devmate-ai\.next\server\app\api\auth\login\route.js:122:1)
+    at __webpack_require__ (D:\Devmate-ai\.next\server\webpack-runtime.js:33:42)
+    at eval (webpack-internal:///(rsc)/./app/api/auth/login/route.ts:6:70)
+    at (rsc)/./app/api/auth/login/route.ts (D:\Devmate-ai\.next\server\app\api\auth\login\route.js:102:1)
+    at __webpack_require__ (D:\Devmate-ai\.next\server\webpack-runtime.js:33:42)
+    at eval (webpack-internal:///(rsc)/./node_modules/next/dist/build/webpack/loaders/next-app-loader.js?name=app%2Fapi%2Fauth%2Flogin%2Froute&page=%2Fapi%2Fauth%2Flogin%2Froute&appPaths=&pagePath=private-next-app-dir%2Fapi%2Fauth%2Flogin%2Froute.ts&appDir=D%3A%5CDevmate-ai%5Capp&pageExtensions=tsx&pageExtensions=ts&pageExtensions=jsx&pageExtensions=js&rootDir=D%3A%5CDevmate-ai&isDev=true&tsconfigPath=tsconfig.json&basePath=&assetPrefix=&nextConfigOutput=&preferredRegion=&middlewareConfig=e30%3D!:15:98)
+    at (rsc)/./node_modules/next/dist/build/webpack/loaders/next-app-loader.js?name=app%2Fapi%2Fauth%2Flogin%2Froute&page=%2Fapi%2Fauth%2Flogin%2Froute&appPaths=&pagePath=private-next-app-dir%2Fapi%2Fauth%2Flogin%2Froute.ts&appDir=D%3A%5CDevmate-ai%5Capp&pageExtensions=tsx&pageExtensions=ts&pageExtensions=jsx&pageExtensions=js&rootDir=D%3A%5CDevmate-ai&isDev=true&tsconfigPath=tsconfig.json&basePath=&assetPrefix=&nextConfigOutput=&preferredRegion=&middlewareConfig=e30%3D! (D:\Devmate-ai\.next\server\app\api\auth\login\route.js:92:1)
+    at __webpack_require__ (D:\Devmate-ai\.next\server\webpack-runtime.js:33:42)
+    at __webpack_exec__ (D:\Devmate-ai\.next\server\app\api\auth\login\route.js:142:39)
+    at D:\Devmate-ai\.next\server\app\api\auth\login\route.js:143:129
+    at __webpack_require__.X (D:\Devmate-ai\.next\server\webpack-runtime.js:168:21)
+    at D:\Devmate-ai\.next\server\app\api\auth\login\route.js:143:47
+    at Object.<anonymous> (D:\Devmate-ai\.next\server\app\api\auth\login\route.js:146:3)
+    at Module._compile (node:internal/modules/cjs/loader:1760:14)
+    at Object..js (node:internal/modules/cjs/loader:1893:10)
+    at Module.load (node:internal/modules/cjs/loader:1480:32)
+    at Module._load (node:internal/modules/cjs/loader:1299:12)
+    at TracingChannel.traceSync (node:diagnostics_channel:322:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:244:24)
+    at Module.<anonymous> (node:internal/modules/cjs/loader:1503:12)
+    at mod.require (D:\Devmate-ai\node_modules\next\dist\server\require-hook.js:65:28)
+    at require (node:internal/modules/helpers:152:16)
+    at requirePage (D:\Devmate-ai\node_modules\next\dist\server\require.js:109:84)
+    at D:\Devmate-ai\node_modules\next\dist\server\load-components.js:103:84
+    at async loadComponentsImpl (D:\Devmate-ai\node_modules\next\dist\server\load-components.js:103:26)
+    at async DevServer.findPageComponentsImpl (D:\Devmate-ai\node_modules\next\dist\server\next-server.js:714:36)
+    at async DevServer.findPageComponents (D:\Devmate-ai\node_modules\next\dist\server\dev\next-dev-server.js:577:20)
+    at async DevServer.renderPageComponent (D:\Devmate-ai\node_modules\next\dist\server\base-server.js:1910:24)
+    at async DevServer.renderToResponseImpl (D:\Devmate-ai\node_modules\next\dist\server\base-server.js:1962:32)
+    at async DevServer.pipeImpl (D:\Devmate-ai\node_modules\next\dist\server\base-server.js:922:25)  
+    at async NextNodeServer.handleCatchallRenderRequest (D:\Devmate-ai\node_modules\next\dist\server\next-server.js:272:17)
+    at async DevServer.handleRequestImpl (D:\Devmate-ai\node_modules\next\dist\server\base-server.js:818:17)
+    at async D:\Devmate-ai\node_modules\next\dist\server\dev\next-dev-server.js:339:20
+    at async Span.traceAsyncFn (D:\Devmate-ai\node_modules\next\dist\trace\trace.js:154:20)
+    at async DevServer.handleRequest (D:\Devmate-ai\node_modules\next\dist\server\dev\next-dev-server.js:336:24)
+    at async invokeRender (D:\Devmate-ai\node_modules\next\dist\server\lib\router-server.js:179:21)  
+    at async handleRequest (D:\Devmate-ai\node_modules\next\dist\server\lib\router-server.js:359:24) 
+    at async requestHandlerImpl (D:\Devmate-ai\node_modules\next\dist\server\lib\router-server.js:383:13)
+    at async Server.requestListener (D:\Devmate-ai\node_modules\next\dist\server\lib\start-server.js:141:13) {
+  page: '/api/auth/login'
+}
+  4 |
+  5 | if (!MONGODB_URI) {
+> 6 |   throw new Error('Please define the MONGODB_URI environment variable')
+    |         ^
+  7 | }
+  8 |
+  9 | interface CachedConnection {
+ POST /api/auth/login 500 in 361ms

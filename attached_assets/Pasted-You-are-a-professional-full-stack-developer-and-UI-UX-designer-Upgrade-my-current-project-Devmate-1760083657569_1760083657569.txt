@@ -1,0 +1,58 @@
+You are a professional full-stack developer and UI/UX designer. 
+Upgrade my current project “Devmate v2.0 – Powered by Gemini Pro” to a modern, premium-quality app like ChatGPT.
+
+### Goals:
+1. *Enhance Light Mode Theme*
+   - Improve overall contrast and readability.
+   - Use a clean, minimalist theme with smooth gradients, shadows, and depth.
+   - Keep a professional color palette (soft whites, gray-blue backgrounds, subtle purple/violet accents).
+   - Make text, icons, and cards visually clear and distinct.
+   - Ensure responsiveness and modern layout consistency.
+   - Use smooth transitions, hover effects, and rounded corners (2xl).
+
+2. *Add Complete User Authentication System*
+   - Create a *Login / Signup portal*.
+   - Signup: Collect user details (Name, Email, Password).
+   - Login: Authenticate existing users securely.
+   - Logout button on top-right with profile icon.
+   - Integrate Firebase Auth or JWT-based Node.js authentication.
+   - Encrypt passwords before storing.
+
+3. *Add Database Integration (MongoDB preferred)*
+   - Store user profile details and credentials.
+   - Save chat histories per user (date, prompt, response).
+   - Each session’s chats should be retrievable after login.
+   - Allow deleting specific chats or clearing entire chat history.
+
+4. *UI/UX Upgrade (Like ChatGPT)*
+   - Left sidebar with:
+     - “New Chat”
+     - “History” (show chat titles and timestamps)
+     - “Profile” and “Settings” buttons.
+   - Main Chat Area:
+     - Smooth conversation bubbles for user and AI messages.
+     - Input box with Send icon and Enter-to-send support.
+     - Auto-scroll on new message.
+     - Code outputs appear in styled cards with syntax highlighting.
+   - Header bar showing app name and user avatar.
+   - Responsive design for mobile and desktop.
+
+5. *Optional Add-ons*
+   - Theme switcher (Light/Dark mode toggle).
+   - Animated loading dots during AI response.
+   - Toast notifications for login/signup success/failure.
+   - Simple analytics dashboard (e.g., number of chats, sessions, etc).
+
+### Tech Stack (Recommended)
+- *Frontend:* React + TailwindCSS
+- *Backend:* Node.js + Express
+- *Database:* MongoDB (Mongoose)
+- *Auth:* Firebase Auth or JWT
+- *AI Backend (existing):* Gemini Pro (keep integrated)
+- *Deployment:* Replit/vercel-compatible full stack setup
+
+### Deliverables
+- Fully working prototype with all features above.
+- Responsive and visually appealing UI/UX (like ChatGPT).
+- Well-structured folders (client, server, models, routes, components, etc.).
+- Replit-ready configuration with environment variables.

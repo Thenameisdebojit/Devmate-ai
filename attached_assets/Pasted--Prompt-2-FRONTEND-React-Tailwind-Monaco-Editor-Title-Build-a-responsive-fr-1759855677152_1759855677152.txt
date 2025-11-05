@@ -1,0 +1,177 @@
+## 🌐 *Prompt 2 — FRONTEND (React + Tailwind + Monaco Editor)*
+
+*Title:*
+
+> 🎨 Build a responsive frontend for “Devmate” — AI Coding Assistant
+
+*Prompt for Replit AI:*
+
+---
+
+You are a senior React frontend developer and UI/UX designer.
+Build a *modern, responsive, mobile-friendly frontend* for *Devmate*, the Gemini-powered coding assistant.
+
+---
+
+### 🎨 *Requirements*
+
+*Goals:*
+
+* Build a 2-panel layout: Chat (left) + Code Output (right)
+* Allow users to:
+
+  * Type a prompt → send to /generate
+  * Paste code → send to /explain
+  * Switch domain (dropdown)
+  * Toggle dark/light mode
+* Display syntax-highlighted code
+* Mobile view → stacked layout
+* Desktop view → split layout
+
+---
+
+### ⚙ *Tech Stack*
+
+* React (Vite)
+* TailwindCSS
+* Axios (API calls)
+* Framer Motion (animations)
+* Monaco Editor (@monaco-editor/react)
+* Zustand (state management)
+* Shadcn/UI or Material UI (components)
+* Heroicons (icons)
+
+---
+
+### 🗂 *Folder Structure*
+
+
+frontend/
+├── src/
+│   ├── App.jsx
+│   ├── components/
+│   │   ├── ChatBox.jsx
+│   │   ├── CodeOutput.jsx
+│   │   ├── DomainSwitcher.jsx
+│   │   ├── Header.jsx
+│   │   └── ThemeToggle.jsx
+│   ├── store/useChatStore.js
+│   ├── index.css
+│   └── main.jsx
+├── index.html
+├── package.json
+└── tailwind.config.js
+
+
+---
+
+### 💬 *UI Layout*
+
+*Header*
+
+* App name “Devmate”
+* Theme toggle
+* Domain dropdown (“Web Dev”, “ML”, “Backend”, “Data Science”)
+
+*Main Section*
+
+* Left panel: Chat history + input box
+* Right panel: Syntax-highlighted code (Monaco)
+* Loading animation while waiting for response
+
+*Footer*
+
+* “Built with Gemini ADK • 2025”
+
+---
+
+### 🧠 *Core Logic*
+
+In useChatStore.js:
+
+js
+import { create } from "zustand";
+
+export const useChatStore = create((set) => ({
+  messages: [],
+  domain: "General",
+  loading: false,
+  addMessage: (msg) => set((state) => ({ messages: [...state.messages, msg] })),
+  setDomain: (domain) => set({ domain }),
+  setLoading: (v) => set({ loading: v }),
+}));
+
+
+In ChatBox.jsx:
+
+* Input box for prompts
+* “Generate” and “Explain” buttons
+* Axios POST to backend endpoints
+* Append responses to chat
+
+In CodeOutput.jsx:
+
+* Display Monaco editor with generated code
+* Enable copy/download buttons
+
+In DomainSwitcher.jsx:
+
+* Dropdown → /switch-domain POST
+* Update Zustand state
+
+---
+
+### 📱 *Responsive Rules*
+
+* Use Tailwind grid grid-cols-1 md:grid-cols-2
+* Mobile → chat on top, code output below
+* Desktop → side-by-side split
+* Use overflow-auto, scroll-smooth, and gradient background
+
+---
+
+### 🎨 *UI Style Guide*
+
+* Colors:
+
+  * bg-slate-900 / bg-white
+  * Accent: text-indigo-400 / text-emerald-400
+* Font: “Inter” or “Poppins”
+* Buttons: rounded-xl, shadow-md, gradient hover
+* Smooth fade/slide transitions with *Framer Motion*
+* Skeleton loader for responses
+
+---
+
+### 🧩 *Example Component Imports*
+
+jsx
+import { motion } from "framer-motion";
+import { useChatStore } from "../store/useChatStore";
+import Editor from "@monaco-editor/react";
+import axios from "axios";
+
+
+---
+
+### 🚀 *Run Instructions*
+
+bash
+npm install
+npm run dev
+
+
+Ensure backend runs on port 8000 (CORS enabled).
+Set API base URL via environment variable or axios.defaults.baseURL.
+
+---
+
+### ✅ Deliverables
+
+* Mobile + desktop responsive frontend
+* Clean UI/UX with Tailwind + Framer Motion
+* Functional integration with FastAPI backend
+* Domain switcher & dark mode
+* Polished final layout ready for demo
+
+---

@@ -1,0 +1,63 @@
+16:01:00.164 Running build in Washington, D.C., USA (East) – iad1
+16:01:00.165 Build machine configuration: 2 cores, 8 GB
+16:01:00.178 Cloning github.com/Thenameisdebojit/Devmate-ai (Branch: main, Commit: 679c339)
+16:01:00.185 Skipping build cache, deployment was triggered without cache.
+16:01:00.643 Cloning completed: 465.000ms
+16:01:01.019 Running "vercel build"
+16:01:01.401 Vercel CLI 48.2.9
+16:01:01.719 Installing dependencies...
+16:01:04.388 npm warn deprecated rimraf@3.0.2: Rimraf versions prior to v4 are no longer supported
+16:01:04.957 npm warn deprecated inflight@1.0.6: This module is not supported, and leaks memory. Do not use it. Check out lru-cache if you want a good and tested way to coalesce async requests by a key value, which is much more comprehensive and powerful.
+16:01:05.899 npm warn deprecated @humanwhocodes/object-schema@2.0.3: Use @eslint/object-schema instead
+16:01:05.979 npm warn deprecated @humanwhocodes/config-array@0.13.0: Use @eslint/config-array instead
+16:01:06.079 npm warn deprecated glob@7.2.3: Glob versions prior to v9 are no longer supported
+16:01:08.006 npm warn deprecated eslint@8.57.1: This version is no longer supported. Please see https://eslint.org/version-support for other options.
+16:01:14.923 
+16:01:14.924 added 456 packages in 13s
+16:01:14.924 
+16:01:14.924 159 packages are looking for funding
+16:01:14.924   run `npm fund` for details
+16:01:14.981 Detected Next.js version: 14.2.33
+16:01:14.985 Running "npm run build"
+16:01:15.090 
+16:01:15.090 > devmate@2.0.0 build
+16:01:15.090 > next build
+16:01:15.090 
+16:01:15.617 Attention: Next.js now collects completely anonymous telemetry regarding usage.
+16:01:15.618 This information is used to shape Next.js' roadmap and prioritize features.
+16:01:15.619 You can learn more, including how to opt-out if you'd not like to participate in this anonymous program, by visiting the following URL:
+16:01:15.619 https://nextjs.org/telemetry
+16:01:15.619 
+16:01:15.672   ▲ Next.js 14.2.33
+16:01:15.672 
+16:01:15.725    Creating an optimized production build ...
+16:01:23.553 Failed to compile.
+16:01:23.554 
+16:01:23.555 ./app/api/auth/login/route.ts
+16:01:23.555 Module not found: Can't resolve '@/lib/mongodb'
+16:01:23.555 
+16:01:23.555 https://nextjs.org/docs/messages/module-not-found
+16:01:23.556 
+16:01:23.556 ./app/api/auth/login/route.ts
+16:01:23.556 Module not found: Can't resolve '@/lib/auth'
+16:01:23.556 
+16:01:23.557 https://nextjs.org/docs/messages/module-not-found
+16:01:23.557 
+16:01:23.557 ./app/api/auth/me/route.ts
+16:01:23.557 Module not found: Can't resolve '@/lib/mongodb'
+16:01:23.557 
+16:01:23.557 https://nextjs.org/docs/messages/module-not-found
+16:01:23.557 
+16:01:23.557 ./app/api/auth/me/route.ts
+16:01:23.557 Module not found: Can't resolve '@/lib/auth'
+16:01:23.557 
+16:01:23.557 https://nextjs.org/docs/messages/module-not-found
+16:01:23.557 
+16:01:23.557 ./app/api/auth/profile/route.ts
+16:01:23.557 Module not found: Can't resolve '@/lib/mongodb'
+16:01:23.557 
+16:01:23.557 https://nextjs.org/docs/messages/module-not-found
+16:01:23.557 
+16:01:23.567 
+16:01:23.578 > Build failed because of webpack errors
+16:01:23.596 Error: Command "npm run build" exited with 1

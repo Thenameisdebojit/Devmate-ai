@@ -1,0 +1,182 @@
+# Replit AI Prompt — *Enhance Devmate UI/UX/CX* (paste this whole prompt into Replit AI)
+
+*Role:* You are a senior UI/UX designer, frontend engineer, and prompt-engineer. Act like a small team (designer + frontend dev + accessibility engineer + prompt engineer) and deliver production-ready UI/UX improvements, assets, and code changes to make *Devmate* look and feel like a premium, industrial-grade AI assistant (Claude/Perplexity/Grok quality). Use the existing tech stack: *Next.js 14 (App Router), **TypeScript, **Tailwind CSS, **Zustand, **Monaco Editor, **Framer Motion, **react-hot-toast, and **Gemini 2.5 pro* on the backend endpoints already available (/generate, /explain, /switch-domain, /rewrite, /fix).
+
+---
+
+## Objective (high level)
+
+Transform the current simple UI into a polished, developer-first product with:
+
+* A consistent design system (dark-first glassmorphism + light theme)
+* Smooth microinteractions and keyboard-first UX (Cmd/Ctrl+K command bar)
+* Copy/download-first output panel (one-click copy + download)
+* Mobile-first responsive design with elegant desktop split layout
+* Accessible, performant, and production-ready code + Figma mockups and a PR-ready commit
+
+---
+
+## Deliverables (what I expect you to produce)
+
+1. *PR-ready code changes* — update Next.js app components and styles (components, theme, layout, header, chat, code panel, command bar). Include unit & e2e test stubs.
+2. *Design system file* — Tailwind tokens + tailwind.config.ts additions and CSS utilities for glassmorphism.
+3. *Figma-compatible mockups* — 3 screens (mobile chat, desktop split, command palette) and an exported PNG for header/logo assets.
+4. *Prompt templates* — Gemini prompt templates (YAML/MD) for Generate, Explain, Rewrite, Fix (few-shot examples + system role).
+5. *README update* — clear change log + steps to run locally and deploy to Vercel (including ENV var VITE_API_BASE_URL).
+6. *Acceptance checklist* — final QA steps, accessibility checks, and playbook for future UI changes.
+
+---
+
+## Requirements & Acceptance Criteria
+
+* *Visual style:* Dark-first glassmorphism (backdrop blur + soft gradients) with an optional light theme toggle. Typography: Inter / Satoshi. Accent: electric blue (#3B82F6) and emerald success.
+* *Layout:* Mobile: stacked (chat → code); Desktop: 2-column split (chat left, code output right). Use max-w-6xl mx-auto p-4.
+* *Command bar:* Global (Cmd/Ctrl+K) with fuzzy search across conversations/actions/templates.
+* *Code output:* Monaco Editor on right with language detection, one-click *Copy, **Download* (.py/.js/.ts detection), and *Rate/Regenerate* actions. Show token usage if returned by backend.
+* *Domain switching:* Dropdown that POSTs to /switch-domain and persists domain in Zustand + localStorage.
+* *Prompt engineering:* Use temperature 0.2–0.4 for generation; inject domain context as system instructions. Implement and store reusable prompt templates.
+* *Microinteractions:* Framer Motion for page/chips, toast notifications on copy/download (react-hot-toast), loading skeletons for streaming responses.
+* *Accessibility:* Keyboard nav, ARIA labels, focus outlines, sufficient contrast (WCAG AA), prefers-reduced-motion support.
+* *Performance:* Lazy-load Monaco, code-split heavy libs, compress images, and keep initial bundle minimal.
+* *Tests:* Provide Playwright e2e test that covers: send generate request, receive output, copy code, download file, switch domain.
+* *Deliver as:* well-formed git diff / PR, with atomic commits and clear commit messages.
+
+---
+
+## Implementation tasks (step-by-step, do them all)
+
+1. *Audit & baseline*
+
+   * Run a quick audit (list existing pages/components to modify).
+   * Produce a single-page Figma mock with component tokens.
+
+2. *Design system & Tailwind*
+
+   * Add a theme section to tailwind.config.ts with color tokens:
+
+     ts
+     // tailwind.config.ts (snippet)
+     module.exports = {
+       theme: {
+         extend: {
+           colors: {
+             devmate: {
+               bg: '#0B0F19',
+               panel: 'rgba(255,255,255,0.06)',
+               accent: '#3B82F6',
+               muted: '#9CA3AF'
+             }
+           },
+           backdropBlur: { xs: '4px', DEFAULT: '12px' }
+         }
+       }
+     }
+     
+   * Add utilities for glass cards: bg-[rgba(255,255,255,0.04)] backdrop-blur-xl border border-[rgba(255,255,255,0.06)] rounded-2xl.
+
+3. *Core components*
+
+   * Header — logo, domain dropdown, theme toggle, export/clear buttons.
+   * CommandBar — implement with [kbar] or headless combobox; add keyboard shortcut Cmd/Ctrl+K.
+   * ChatBox — message list, input with action tabs (Generate/Explain/Rewrite/Fix), streaming indicator, skeletons.
+   * CodeOutput — Monaco editor, copy/download, regenerate, token & domain info.
+   * MessageBubble — support markdown rendering + code blocks with copy icons.
+
+   Provide implementations as TypeScript React components (client components in Next.js app dir). Use Zustand for store (messages, domain, loading, theme).
+
+4. *Prompt templates & prompt-engineering*
+
+   * Create /config/prompts/*.yaml with:
+
+     * system (Devmate persona)
+     * examples (few-shot pairs for generate/explain/fix)
+     * temperature and recommended model (gemini-2.5-pro), max_tokens
+   * On each request, client should send action and templateId so backend can apply template. (If backend is static, implement client-side template injection as fallback.)
+
+   Example system message:
+
+   > You are Devmate, a meticulous developer assistant. Always respond with runnable code, short explanation, and test suggestions. If asked to fix, include a failing test snippet.
+
+5. *UX details*
+
+   * Add copy / download behavior:
+
+     ts
+     await navigator.clipboard.writeText(code);
+     // download:
+     const blob = new Blob([code], { type: 'text/plain' });
+     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename; a.click();
+     
+   * Toast on success (react-hot-toast).
+   * Provide regenerate and rate UI (thumbs + star).
+
+6. *Animations & accessibility*
+
+   * Use Framer Motion motion.div wrappers for list items with staggered entrance.
+   * Respect prefers-reduced-motion.
+   * All interactive controls have role, aria-label, and keyboard support.
+
+7. *Performance & lazy loading*
+
+   * Lazy-load Monaco (dynamic import('@monaco-editor/react')) and only load supported languages.
+   * Memoize heavy components.
+
+8. *Tests*
+
+   * Write a Playwright e2e test that:
+
+     * Loads app
+     * Switches domain → assert toast & domain persisted
+     * Sends a “generate” prompt → waits for output
+     * Clicks copy → assert clipboard content (Playwright clipboard API)
+     * Clicks download → assert download file present
+   * Add unit tests for domain store and copy/download helpers.
+
+9. *Docs & PR*
+
+   * Update README with run instructions, env vars, and new UX features.
+   * Create PR with commits grouped:
+
+     * feat(ui): design system + layout
+     * feat(ui): command bar + domain switch
+     * feat(ui): monaco output + copy-download
+     * test: add e2e playwright test
+     * chore: update tailwind.config, README
+
+---
+
+## Prompt-engineering: exact templates (include these verbatim in /config/prompts/*.yaml)
+
+*system:*
+You are Devmate, an expert developer assistant. When asked to generate code, produce runnable, minimal, well-documented code, and a short explanation (3-5 lines). When asked to explain, annotate line-by-line. When asked to fix, present the fixed code and unit tests where applicable.
+
+*few_shot (generate example):*
+
+* Input: Build a React todo list using functional components, no external state libraries.
+* Output: Provide a complete React component (TSX) with necessary hooks + short 3-line explanation. Make code copy-paste runnable.
+
+*meta:* temperature: 0.3, model: gemini-2.5-pro, max_tokens: 1200
+
+---
+
+## Acceptance QA (final checklist)
+
+* [ ] Desktop split layout matches Figma mock (pixel-approx).
+* [ ] Mobile stacked layout is functional and responsive.
+* [ ] Command bar opens with Cmd/Ctrl+K; fuzzy search works.
+* [ ] Monaco loads lazily; copy/download work and show toast feedback.
+* [ ] Domain switch persists and calls /switch-domain.
+* [ ] Accessibility checks (aria, tab order, contrast) pass basic audit.
+* [ ] Playwright e2e passes locally.
+* [ ] PR contains Figma export and README updates.
+
+---
+
+## Extra instructions for Replit AI (how to output)
+
+* Produce code changes as a git branch and show the diff (or a zip). Include exact file paths and content.
+* Generate the Figma mockup file (or at minimum export PNG/SVGs) and include a short style guide (colors, font stack, tokens).
+* Add short developer notes in CHANGELOG.md describing UX decisions and prompt-engineering rationale.
+* When you finish, summarize what you changed in ≤ 8 lines and include the exact commands to run locally.
+
+---

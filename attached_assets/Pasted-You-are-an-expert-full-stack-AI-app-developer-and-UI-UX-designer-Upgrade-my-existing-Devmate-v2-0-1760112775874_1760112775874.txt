@@ -1,0 +1,88 @@
+You are an expert full-stack AI app developer and UI/UX designer.
+Upgrade my existing "Devmate v2.0 – Powered by Gemini Pro" into **Devmate v2.1**, an advanced ChatGPT-like web app that is smarter, visually polished, and fully responsive.
+
+### 🧩 Fixes & Core Improvements
+1. **Sidebar Scrolling Issue**
+   - Fix the left sidebar so it remains fixed (non-scrollable) while the chat area scrolls independently.
+   - Sidebar should stay pinned vertically even when chat messages overflow.
+   - Make sure layout uses `position: fixed` or `sticky` with proper height handling (`h-screen`).
+
+2. **Domain Selection Feature**
+   - At the top of the chat interface (or in a modal), add a **Domain Selector** dropdown.
+   - Available domains:
+     - 🧠 General
+     - 💻 Web Development
+     - 🤖 Machine Learning / AI
+     - 📊 Data Science
+     - 📝 Academic / Research
+     - 🪄 Prompt Engineering
+   - The AI’s response tone and logic should adapt based on the selected domain.
+   - Save the chosen domain in the chat context so it persists for the session.
+
+3. **Smarter AI Behavior**
+   - Fix current issue: when user says “Hi” or “Hello”, the bot shouldn’t generate random code.
+   - Make the chatbot respond naturally to greetings, questions, and conversations intelligently.
+   - Add a reasoning layer (like ChatGPT) — if the query is conversational, respond textually; if it’s task-based, generate relevant code or explanation.
+   - Include context-awareness: the AI should understand previous messages in a session.
+
+4. **Light Mode / Dark Mode**
+   - Add a clean theme toggle (sun/moon icon) in the top-right corner.
+   - Use Tailwind’s `dark:` mode with smooth transitions.
+   - Ensure consistent color palette for both themes (e.g., dark background with neutral gray text; light mode with white background and dark text).
+   - Persist the chosen theme in localStorage.
+
+5. **Enhanced UI/UX Design**
+   - Make it look **as professional as ChatGPT’s interface**, with:
+     - Centered chat container with soft shadows and glassmorphism effect.
+     - Beautiful hover effects on buttons and message bubbles.
+     - Rounded corners (2xl), proper spacing, and transitions.
+     - AI messages in subtle gradient backgrounds with syntax-highlighted code blocks.
+     - Use TailwindCSS + Framer Motion for animations (fade-in, slide, and hover transitions).
+   - Use adaptive typography for all screen sizes.
+
+6. **Architecture & Components**
+   - Components to include:
+     - `Sidebar` (fixed) → New Chat, History, Settings, Domain Selector.
+     - `ChatArea` → Scrollable chat container with message bubbles.
+     - `MessageInput` → Text input with send button.
+     - `ThemeToggle` → Light/Dark mode toggle.
+     - `DomainSelector` → Dropdown for domain.
+     - `WelcomePage` → Short intro with “Get Started” button.
+     - `GuideModal` → Optional help pop-up.
+   - Ensure seamless navigation between WelcomePage → ChatArea.
+
+7. **Intelligent Backend (Optional Enhancement)**
+   - Improve AI reasoning by adding a classification layer:
+     - Detect intent → conversation, explanation, or code request.
+     - Route the query appropriately to the model (Gemini Pro / text model).
+   - Store domain + chat history context for better continuity.
+
+8. **Performance & Compatibility**
+   - Fully responsive on all screen sizes (desktop, tablet, mobile).
+   - Optimize for both app view and web view.
+   - Use TailwindCSS for layout flexibility.
+   - Use React hooks (`useState`, `useEffect`, `useContext`) for managing theme, domain, and chat context.
+
+### 🎨 Design Goals
+- Professional, ChatGPT-like interface.
+- Clean fixed sidebar and scrollable chat window.
+- Natural conversation flow with contextual memory.
+- Smart domain-based response handling.
+- Smooth theme transitions.
+- Consistent UX across devices.
+
+### ⚙️ Tech Stack
+- Frontend: React + TailwindCSS + Framer Motion
+- Backend: Node.js + Express (API routes)
+- Database: MongoDB or Firebase
+- Model: Gemini Pro API (for reasoning and code generation)
+- Auth: Firebase Auth or JWT
+
+### 🚀 Deliverables
+- Fixed sidebar layout (non-scrolling).
+- Domain selector integrated into the chat.
+- Smarter AI reasoning with context memory.
+- Light/Dark mode with persistence.
+- Fully modern, responsive, animated UI.
+
+Ensure **Devmate v2.1** feels and behaves like ChatGPT — a balanced blend of conversational AI and developer productivity tool.

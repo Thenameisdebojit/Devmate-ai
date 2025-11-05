@@ -1,0 +1,241 @@
+---
+## 🚀 *Replit AI Prompt — Build and Deploy “Devmate v2” on Vercel*
+
+### *🎯 Role*
+
+You are a senior full-stack engineer specializing in LLM-powered developer tools.
+Your task is to *refactor and enhance Devmate* — a Gemini-ADK-powered AI coding assistant — into a *Claude-like experience* with *copyable outputs, improved accuracy, and **seamless Vercel deployment* (developed inside Replit).
+
+---
+
+### *🧠 Functional Goals*
+
+1. *Improve accuracy and efficiency*
+
+   * Cache user queries locally.
+   * Use refined Gemini prompts (few-shot examples).
+   * Support “rewrite”, “fix”, and “explain” actions.
+
+2. *Enable copy & export features*
+
+   * Users can copy code with one click (navigator.clipboard.writeText()).
+   * “Download as .py/.js” button under output area.
+   * Optional: Export entire conversation to .txt file.
+
+3. *UI/UX parity with Claude*
+
+   * Smooth multi-turn chat interface.
+   * Syntax-highlighted output panel.
+   * Beautiful, clean design (glassmorphism + Tailwind gradients).
+   * Mobile-first + desktop split-view responsive layout.
+
+4. *Deployment*
+
+   * Host frontend on *Vercel* (/frontend).
+   * Host backend (FastAPI + Gemini ADK) on *Replit* (serve JSON API).
+   * Use Replit’s public URL as API base for Vercel app.
+
+---
+
+### *⚙ Architecture Overview*
+
+
+frontend (React + Vite + Tailwind)
+    ↓  calls
+backend (FastAPI + Gemini ADK on Replit)
+    ↓  uses
+Gemini API (gemini-1.5-pro)
+
+
+---
+
+### *🧩 Required Features*
+
+*Backend (Replit FastAPI + Gemini ADK):*
+
+* Endpoints: /generate, /explain, /rewrite, /fix, /switch-domain
+* Cache latest 5 prompts/responses in memory
+* Use Gemini generate_content with temperature=0.4 for accuracy
+* Return JSON:
+
+  json
+  { "code": "...", "explanation": "...", "domain": "ML", "tokens": 1234 }
+  
+
+*Frontend (Vite + React + Tailwind + Monaco):*
+
+* Chat-style prompt input
+* Tabs for “Generate / Explain / Fix”
+* Output with syntax-highlighting (Monaco)
+* Buttons:
+
+  * “Copy Code”
+  * “Download Code”
+  * “Clear Chat”
+* Toast notification: “Code copied!” (using react-hot-toast)
+* Loading shimmer + animation
+* Domain switcher (dropdown)
+* Responsive for mobile (stacked view)
+
+---
+
+### *🧑‍💻 Folder Layout*
+
+
+Devmate-v2/
+├── backend/
+│   ├── main.py
+│   ├── agent.py
+│   ├── requirements.txt
+│   └── logs/gemini.log
+└── frontend/
+    ├── src/
+    │   ├── App.jsx
+    │   ├── components/
+    │   │   ├── ChatBox.jsx
+    │   │   ├── CodeOutput.jsx
+    │   │   ├── DomainSwitcher.jsx
+    │   │   ├── CopyButton.jsx
+    │   │   └── Header.jsx
+    │   ├── store/useChatStore.js
+    │   ├── index.css
+    │   └── main.jsx
+
+
+---
+
+### *🔥 Backend Prompt Example (in FastAPI)*
+
+python
+@app.post("/generate")
+async def generate_code(request: Request):
+    data = await request.json()
+    prompt = data.get("prompt", "")
+    model = genai.GenerativeModel("gemini-1.5-pro")
+    result = model.generate_content(f"Write clean, working {agent.domain} code:\n{prompt}", temperature=0.4)
+    return {"code": result.text, "domain": agent.domain}
+
+
+---
+
+### *✨ Frontend Prompt Example (in React)*
+
+*CopyButton.jsx*
+
+jsx
+import { toast } from "react-hot-toast";
+
+export default function CopyButton({ text }) {
+  const handleCopy = async () => {
+    await navigator.clipboard.writeText(text);
+    toast.success("Copied to clipboard!");
+  };
+  return (
+    <button
+      onClick={handleCopy}
+      className="px-3 py-1 rounded-md bg-indigo-600 text-white hover:bg-indigo-700"
+    >
+      Copy
+    </button>
+  );
+}
+
+
+*DownloadButton.jsx*
+
+jsx
+export default function DownloadButton({ text, filename = "devmate_code.py" }) {
+  const download = () => {
+    const blob = new Blob([text], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+  return (
+    <button
+      onClick={download}
+      className="px-3 py-1 rounded-md bg-emerald-500 text-white hover:bg-emerald-600 ml-2"
+    >
+      Download
+    </button>
+  );
+}
+
+
+---
+
+### *📱 Responsive Design Rules*
+
+* Desktop: grid-cols-2 split (chat | code)
+* Mobile: flex-col stacked
+* Code output scrollable with overflow-x-auto
+* Tailwind utilities: max-w-4xl mx-auto p-4 sm:p-6
+* Gradient background: from-indigo-950 via-slate-900 to-gray-900
+
+---
+
+### *🪄 Styling and UX Details*
+
+* Font: Inter, font-sans
+* Button hover: subtle scale-up with transition
+* Use *Framer Motion* for fade transitions
+* Toast on copy/download success
+* Include logo in header (small Gemini icon + “Devmate” text)
+
+---
+
+### *🌍 Deployment Instructions (auto-generate README)*
+
+*1️⃣ Backend on Replit*
+
+* Add YOUR_GEMINI_API_KEY in Replit Secrets.
+* Run uvicorn main:app --host 0.0.0.0 --port 8000
+* Note the public URL, e.g.
+  https://devmate-backend.<your-replit-username>.repl.co
+
+*2️⃣ Frontend (Vercel)*
+
+* In /frontend/.env:
+
+  
+  VITE_API_BASE_URL=https://devmate-backend.<your-replit-username>.repl.co
+  
+* Push frontend folder to GitHub → import in [vercel.com/new](https://vercel.com/new)
+* Vercel will auto-detect Vite and deploy.
+
+*3️⃣ Test live deployment:*
+
+* Open <vercel-app-url> and run prompts.
+* Verify code can be copied/downloaded.
+
+---
+
+### *✅ Deliverables*
+
+* Accurate, fast code generation via Gemini
+* Working “Copy” and “Download” buttons
+* Beautiful responsive UI (Claude-like)
+* FastAPI backend + Vercel frontend
+* Ready for demo and hackathon submission
+
+---
+
+### *Bonus Improvements (optional)*
+
+* Add “Chat History Export” feature.
+* Include “Rate this answer” buttons.
+* Add small banner: “Powered by Gemini ADK”.
+
+---
+
+### *💬 Final Instruction to Replit AI*
+
+> Generate the full production codebase (backend + frontend) exactly as described above, optimized for deployment on Replit + Vercel.
+> Ensure code outputs can be *copied, **downloaded, and **accurately generated*.
+> After generation, test both locally and deployed.
+> Use mobile-first, glassmorphism UI principles.
+
+---
