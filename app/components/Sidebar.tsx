@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useAuthStore } from '../store/useAuthStore'
 import { useChatStore } from '../store/useChatStore'
 import { motion, AnimatePresence } from 'framer-motion'
-import { FiPlus, FiMessageSquare, FiUser, FiSettings, FiLogOut, FiMenu, FiX, FiTrash2, FiBook } from 'react-icons/fi'
+import { FiPlus, FiMessageSquare, FiUser, FiSettings, FiLogOut, FiMenu, FiX, FiTrash2, FiBook, FiSidebar } from 'react-icons/fi'
 import Tooltip from './Tooltip'
 import UserGuide from './UserGuide'
 import toast from 'react-hot-toast'
@@ -113,9 +113,10 @@ export default function Sidebar({ onOpenAuth, onNewChat, onOpenSettings, onLoadC
       {!isOpenProp && (
         <button
           onClick={onToggle}
-          className="hidden lg:block fixed top-4 left-4 z-50 p-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition-all"
+          className="hidden lg:block fixed top-4 left-4 z-50 p-2 rounded-md bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-all shadow-sm"
+          title="Open sidebar"
         >
-          <FiMenu className="w-6 h-6" />
+          <FiSidebar className="w-5 h-5" />
         </button>
       )}
 
@@ -148,10 +149,10 @@ export default function Sidebar({ onOpenAuth, onNewChat, onOpenSettings, onLoadC
                 {/* Desktop Close Button */}
                 <button
                   onClick={onToggle}
-                  className="hidden lg:block p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-600 dark:text-gray-400"
+                  className="hidden lg:block p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
                   title="Close sidebar"
                 >
-                  <FiX className="w-5 h-5" />
+                  <FiSidebar className="w-5 h-5" />
                 </button>
               </div>
 

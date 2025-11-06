@@ -122,24 +122,27 @@ export async function callAIModel(
     if (model.startsWith('google')) {
       const modelName = model.includes('flash') ? 'gemini-2.5-flash' : 'gemini-2.5-pro'
       
-      const config: any = {}
-      if (systemInstruction) {
-        config.systemInstruction = systemInstruction
-      }
-      if (temperature) {
-        config.temperature = temperature
-      }
-      
-      const response = await gemini.models.generateContent({
+      const requestParams: any = {
         model: modelName,
         contents: [
           {
             role: 'user',
             parts: [{ text: prompt }]
           }
-        ],
-        config: Object.keys(config).length > 0 ? config : undefined,
-      })
+        ]
+      }
+      
+      if (systemInstruction) {
+        requestParams.systemInstruction = { text: systemInstruction }
+      }
+      
+      if (temperature || maxTokens) {
+        requestParams.config = {}
+        if (temperature) requestParams.config.temperature = temperature
+        if (maxTokens) requestParams.config.maxOutputTokens = maxTokens
+      }
+      
+      const response = await gemini.models.generateContent(requestParams)
       
       return response.text || ''
     }
@@ -269,24 +272,27 @@ export async function* streamAIModel(
   } else if (model.startsWith('google')) {
     const modelName = model.includes('flash') ? 'gemini-2.5-flash' : 'gemini-2.5-pro'
     
-    const config: any = {}
-    if (systemInstruction) {
-      config.systemInstruction = systemInstruction
-    }
-    if (temperature) {
-      config.temperature = temperature
-    }
-    
-    const response = await gemini.models.generateContentStream({
+    const requestParams: any = {
       model: modelName,
       contents: [
         {
           role: 'user',
           parts: [{ text: prompt }]
         }
-      ],
-      config: Object.keys(config).length > 0 ? config : undefined,
-    })
+      ]
+    }
+    
+    if (systemInstruction) {
+      requestParams.systemInstruction = { text: systemInstruction }
+    }
+    
+    if (temperature || maxTokens) {
+      requestParams.config = {}
+      if (temperature) requestParams.config.temperature = temperature
+      if (maxTokens) requestParams.config.maxOutputTokens = maxTokens
+    }
+    
+    const response = await gemini.models.generateContentStream(requestParams)
     
     for await (const chunk of response) {
       const text = chunk.text || ''

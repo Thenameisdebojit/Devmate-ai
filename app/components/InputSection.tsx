@@ -3,7 +3,8 @@
 import { useState, useRef, useEffect } from 'react'
 import { useChatStore, AIModelSelection } from '../store/useChatStore'
 import toast from 'react-hot-toast'
-import { FiSend, FiStopCircle, FiPaperclip, FiX, FiImage, FiChevronDown } from 'react-icons/fi'
+import { FiSend, FiStopCircle, FiPaperclip, FiX, FiImage, FiChevronDown, FiZap, FiCpu } from 'react-icons/fi'
+import { SiOpenai, SiGoogle } from 'react-icons/si'
 import { motion, AnimatePresence } from 'framer-motion'
 
 interface InputSectionProps {
@@ -56,11 +57,24 @@ export default function InputSection({ onNewChat }: InputSectionProps) {
       case 'auto':
         return 'Auto (Smart)'
       case 'chatgpt-5':
-        return 'ChatGPT-5'
+        return 'GPT-5'
       case 'gemini-2.5-pro':
         return 'Gemini 2.5 Pro'
       default:
         return 'Auto (Smart)'
+    }
+  }
+
+  const getModelIcon = (model: AIModelSelection) => {
+    switch (model) {
+      case 'auto':
+        return <FiZap className="w-4 h-4" />
+      case 'chatgpt-5':
+        return <SiOpenai className="w-4 h-4" />
+      case 'gemini-2.5-pro':
+        return <SiGoogle className="w-4 h-4" />
+      default:
+        return <FiZap className="w-4 h-4" />
     }
   }
 
@@ -305,11 +319,12 @@ export default function InputSection({ onNewChat }: InputSectionProps) {
           <button
             type="button"
             onClick={() => setShowModelSelector(!showModelSelector)}
-            className="m-2 px-3 py-2 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors flex items-center gap-2"
+            className="m-2 px-3 py-2 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors flex items-center gap-2 border border-transparent hover:border-gray-300 dark:hover:border-gray-600"
             title="Select AI Model"
           >
-            <span>{getModelLabel(selectedModel)}</span>
-            <FiChevronDown className="w-4 h-4" />
+            {getModelIcon(selectedModel)}
+            <span className="hidden sm:inline">{getModelLabel(selectedModel)}</span>
+            <FiChevronDown className="w-3.5 h-3.5 opacity-70" />
           </button>
 
           <AnimatePresence>
@@ -318,22 +333,41 @@ export default function InputSection({ onNewChat }: InputSectionProps) {
                 initial={{ opacity: 0, y: -10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
-                className="absolute bottom-full mb-2 left-0 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 overflow-hidden z-50"
+                className="absolute bottom-full mb-2 left-0 w-56 bg-white dark:bg-gray-800 rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden z-50"
               >
-                {(['auto', 'chatgpt-5', 'gemini-2.5-pro'] as AIModelSelection[]).map((model) => (
-                  <button
-                    key={model}
-                    type="button"
-                    onClick={() => handleModelSelect(model)}
-                    className={`w-full text-left px-4 py-3 text-sm transition-colors ${
-                      selectedModel === model
-                        ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 font-medium'
-                        : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
-                    }`}
-                  >
-                    {getModelLabel(model)}
-                  </button>
-                ))}
+                <div className="p-2">
+                  {(['auto', 'chatgpt-5', 'gemini-2.5-pro'] as AIModelSelection[]).map((model) => (
+                    <button
+                      key={model}
+                      type="button"
+                      onClick={() => handleModelSelect(model)}
+                      className={`w-full text-left px-3 py-2.5 rounded-lg text-sm transition-all flex items-center gap-3 ${
+                        selectedModel === model
+                          ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 font-medium shadow-sm'
+                          : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                      }`}
+                    >
+                      <span className={selectedModel === model ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-500 dark:text-gray-400'}>
+                        {getModelIcon(model)}
+                      </span>
+                      <div className="flex-1">
+                        <div className="font-medium">{getModelLabel(model)}</div>
+                        {model === 'auto' && (
+                          <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Best model for the task</div>
+                        )}
+                        {model === 'chatgpt-5' && (
+                          <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Advanced reasoning</div>
+                        )}
+                        {model === 'gemini-2.5-pro' && (
+                          <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Google AI</div>
+                        )}
+                      </div>
+                      {selectedModel === model && (
+                        <div className="w-2 h-2 rounded-full bg-indigo-600 dark:bg-indigo-400"></div>
+                      )}
+                    </button>
+                  ))}
+                </div>
               </motion.div>
             )}
           </AnimatePresence>
