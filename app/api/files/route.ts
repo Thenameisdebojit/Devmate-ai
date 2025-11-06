@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import * as archiver from 'archiver'
+import archiver from 'archiver' // ✅ FIXED — default import instead of `* as archiver`
 
 interface ProjectFile {
   path: string
@@ -22,32 +22,28 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    const archive = archiver('zip', {
-      zlib: { level: 9 }
-    })
+    // ✅ Create the archive
+    const archive = archiver('zip', { zlib: { level: 9 } })
+    const chunks: Uint8Array[] = []
 
-    const chunks: Buffer[] = []
-
-    archive.on('data', (chunk: Buffer) => {
-      chunks.push(chunk)
-    })
+    // Collect archive data into memory
+    archive.on('data', (chunk: Buffer) => chunks.push(chunk))
 
     const archivePromise = new Promise<Buffer>((resolve, reject) => {
-      archive.on('end', () => {
-        resolve(Buffer.concat(chunks))
-      })
+      archive.on('end', () => resolve(Buffer.concat(chunks)))
       archive.on('error', reject)
     })
 
-    files.forEach(file => {
+    // ✅ Append all files into the zip
+    files.forEach((file) => {
       archive.append(file.content, { name: `${projectName}/${file.path}` })
     })
 
     await archive.finalize()
-
     const zipBuffer = await archivePromise
 
-    return new Response(zipBuffer as any, {
+    // ✅ Return zip as downloadable file
+    return new Response(zipBuffer, {
       headers: {
         'Content-Type': 'application/zip',
         'Content-Disposition': `attachment; filename="${projectName}.zip"`,
@@ -68,6 +64,7 @@ export async function GET() {
     status: 'operational',
     features: ['zip_export', 'file_bundling'],
     max_files: 100,
-    max_size_mb: 50
+    max_size_mb: 50,
   })
 }
+
