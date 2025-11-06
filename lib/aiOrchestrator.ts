@@ -15,7 +15,10 @@ const gemini = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY || '' 
 })
 
-export type AIModel = 'openai:gpt-5' | 'google:gemini-2.5-pro' | 'google:gemini-2.5-flash'
+// Environment-based model preference
+const PREFERRED_GPT_MODEL = process.env.PREFERRED_GPT_MODEL === 'gpt-4o' ? 'gpt-4o' : 'gpt-5'
+
+export type AIModel = 'openai:gpt-5' | 'openai:gpt-4o' | 'google:gemini-2.5-pro' | 'google:gemini-2.5-flash'
 
 export interface AIRequest {
   prompt: string
@@ -44,14 +47,14 @@ export function chooseModel(prompt: string, action?: string, domain?: string): A
   const codeActions = ['generate', 'rewrite', 'fix']
   const isCodeAction = action && codeActions.includes(action)
   
-  // Web Development domain always uses GPT-5
+  // Web Development domain always uses preferred GPT model
   if (lowerDomain.includes('web') || lowerDomain.includes('development')) {
-    return 'openai:gpt-5'
+    return PREFERRED_GPT_MODEL === 'gpt-4o' ? 'openai:gpt-4o' : 'openai:gpt-5'
   }
   
-  // Code-related tasks use GPT-5
+  // Code-related tasks use preferred GPT model
   if (hasCodeKeywords || isCodeAction) {
-    return 'openai:gpt-5'
+    return PREFERRED_GPT_MODEL === 'gpt-4o' ? 'openai:gpt-4o' : 'openai:gpt-5'
   }
   
   // Reasoning, summaries, explanations -> Gemini 2.5 Pro
@@ -62,8 +65,8 @@ export function chooseModel(prompt: string, action?: string, domain?: string): A
     return 'google:gemini-2.5-pro'
   }
   
-  // Default: use GPT-5 for most tasks
-  return 'openai:gpt-5'
+  // Default: use preferred GPT model for most tasks
+  return PREFERRED_GPT_MODEL === 'gpt-4o' ? 'openai:gpt-4o' : 'openai:gpt-5'
 }
 
 export async function callAIModel(
@@ -82,8 +85,10 @@ export async function callAIModel(
       
       messages.push({ role: 'user', content: prompt })
       
+      const modelName = model.includes('gpt-4o') ? 'gpt-4o' : 'gpt-5'
+      
       const response = await openai.chat.completions.create({
-        model: 'gpt-5',
+        model: modelName,
         messages,
         max_completion_tokens: maxTokens,
       })
@@ -134,19 +139,36 @@ export async function callAIModelWithFailover(
   } catch (error: any) {
     console.warn(`Primary model ${primaryModel} failed, attempting failover:`, error.message)
     
-    // Failover logic
-    const fallbackModel: AIModel = primaryModel.startsWith('openai') 
-      ? 'google:gemini-2.5-pro' 
-      : 'openai:gpt-5'
+    // Smart failover logic
+    // If primary is GPT-5, try GPT-4o first, then Gemini
+    // If primary is GPT-4o, try GPT-5 first, then Gemini
+    // If primary is Gemini, try preferred GPT model
     
-    try {
-      const text = await callAIModel(fallbackModel, request)
-      console.log(`Failover successful with ${fallbackModel}`)
-      return { text, modelUsed: fallbackModel }
-    } catch (fallbackError: any) {
-      console.error(`Failover model ${fallbackModel} also failed:`, fallbackError.message)
-      throw new Error(`Both AI models failed. Primary: ${error.message}, Fallback: ${fallbackError.message}`)
+    const fallbackModels: AIModel[] = []
+    
+    if (primaryModel === 'openai:gpt-5') {
+      fallbackModels.push('openai:gpt-4o', 'google:gemini-2.5-pro')
+    } else if (primaryModel === 'openai:gpt-4o') {
+      fallbackModels.push('openai:gpt-5', 'google:gemini-2.5-pro')
+    } else {
+      fallbackModels.push(
+        PREFERRED_GPT_MODEL === 'gpt-4o' ? 'openai:gpt-4o' : 'openai:gpt-5'
+      )
     }
+    
+    // Try each fallback model
+    for (const fallbackModel of fallbackModels) {
+      try {
+        const text = await callAIModel(fallbackModel, request)
+        console.log(`✓ Failover successful with ${fallbackModel}`)
+        return { text, modelUsed: fallbackModel }
+      } catch (fallbackError: any) {
+        console.warn(`✗ Failover model ${fallbackModel} also failed:`, fallbackError.message)
+        continue
+      }
+    }
+    
+    throw new Error(`All AI models failed. Primary (${primaryModel}): ${error.message}`)
   }
 }
 
@@ -160,17 +182,32 @@ export async function* streamAIModelWithFailover(
   } catch (error: any) {
     console.warn(`Primary streaming model ${primaryModel} failed, attempting failover:`, error.message)
     
-    const fallbackModel: AIModel = primaryModel.startsWith('openai') 
-      ? 'google:gemini-2.5-pro' 
-      : 'openai:gpt-5'
+    // Smart failover logic (same as non-streaming)
+    const fallbackModels: AIModel[] = []
     
-    try {
-      console.log(`Streaming failover to ${fallbackModel}`)
-      yield* streamAIModel(fallbackModel, request)
-    } catch (fallbackError: any) {
-      console.error(`Fallback streaming model ${fallbackModel} also failed:`, fallbackError.message)
-      throw new Error(`Both AI models failed for streaming. Primary: ${error.message}, Fallback: ${fallbackError.message}`)
+    if (primaryModel === 'openai:gpt-5') {
+      fallbackModels.push('openai:gpt-4o', 'google:gemini-2.5-pro')
+    } else if (primaryModel === 'openai:gpt-4o') {
+      fallbackModels.push('openai:gpt-5', 'google:gemini-2.5-pro')
+    } else {
+      fallbackModels.push(
+        PREFERRED_GPT_MODEL === 'gpt-4o' ? 'openai:gpt-4o' : 'openai:gpt-5'
+      )
     }
+    
+    // Try each fallback model
+    for (const fallbackModel of fallbackModels) {
+      try {
+        console.log(`✓ Streaming failover to ${fallbackModel}`)
+        yield* streamAIModel(fallbackModel, request)
+        return
+      } catch (fallbackError: any) {
+        console.warn(`✗ Streaming failover model ${fallbackModel} also failed:`, fallbackError.message)
+        continue
+      }
+    }
+    
+    throw new Error(`All AI models failed for streaming. Primary (${primaryModel}): ${error.message}`)
   }
 }
 
@@ -189,8 +226,10 @@ export async function* streamAIModel(
     
     messages.push({ role: 'user', content: prompt })
     
+    const modelName = model.includes('gpt-4o') ? 'gpt-4o' : 'gpt-5'
+    
     const stream = await openai.chat.completions.create({
-      model: 'gpt-5',
+      model: modelName,
       messages,
       max_completion_tokens: maxTokens,
       stream: true,
