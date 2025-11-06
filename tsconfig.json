@@ -1,27 +1,55 @@
 {
   "compilerOptions": {
-    "target": "ES2017",
-    "lib": ["dom", "dom.iterable", "esnext"],
-    "allowJs": true,
-    "skipLibCheck": true,
-    "strict": true,
-    "noEmit": true,
-    "esModuleInterop": true,
-    "module": "esnext",
-    "moduleResolution": "bundler",
+    /* ===========================
+       ⚙️ Core Compilation Settings
+       =========================== */
+    "target": "ES2021",
+    "lib": ["DOM", "DOM.Iterable", "ESNext"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "jsx": "preserve",
+    "allowJs": true,
+    "checkJs": false,
+    "noEmit": true,
     "incremental": true,
+
+    /* ===========================
+       🧠 Type Safety & Compatibility
+       =========================== */
+    "strict": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "allowSyntheticDefaultImports": true,
+
+    /* ===========================
+       🪄 JSX & Next.js Integration
+       =========================== */
+    "jsx": "preserve",
     "plugins": [
       {
         "name": "next"
       }
     ],
+
+    /* ===========================
+       📁 Path Aliases
+       =========================== */
     "paths": {
       "@/*": ["./*"]
-    }
+    },
+
+    /* ===========================
+       💻 Node Support (for Archiver)
+       =========================== */
+    "types": ["node"]
   },
-  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts"
+  ],
   "exclude": ["node_modules"]
 }

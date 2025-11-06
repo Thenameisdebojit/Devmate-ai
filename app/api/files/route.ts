@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import archiver from 'archiver' // ✅ FIXED — default import instead of `* as archiver`
+import archiver from 'archiver'
 
 interface ProjectFile {
   path: string
@@ -10,6 +10,8 @@ interface ExportRequest {
   projectName: string
   files: ProjectFile[]
 }
+
+export const runtime = 'nodejs' // ✅ Ensures Node APIs like archiver are supported
 
 export async function POST(req: NextRequest) {
   try {
@@ -22,11 +24,11 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // ✅ Create the archive
+    // ✅ Create ZIP archive
     const archive = archiver('zip', { zlib: { level: 9 } })
-    const chunks: Uint8Array[] = []
+    const chunks: Buffer[] = []
 
-    // Collect archive data into memory
+    // Collect archive chunks
     archive.on('data', (chunk: Buffer) => chunks.push(chunk))
 
     const archivePromise = new Promise<Buffer>((resolve, reject) => {
@@ -34,16 +36,24 @@ export async function POST(req: NextRequest) {
       archive.on('error', reject)
     })
 
-    // ✅ Append all files into the zip
-    files.forEach((file) => {
+    // ✅ Add files to archive
+    for (const file of files) {
       archive.append(file.content, { name: `${projectName}/${file.path}` })
-    })
+    }
 
     await archive.finalize()
     const zipBuffer = await archivePromise
 
-    // ✅ Return zip as downloadable file
-    return new Response(zipBuffer, {
+    // ✅ Convert Buffer → ReadableStream (Node-compatible Response)
+    const stream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(zipBuffer)
+        controller.close()
+      },
+    })
+
+    // ✅ Return ZIP as downloadable file
+    return new Response(stream, {
       headers: {
         'Content-Type': 'application/zip',
         'Content-Disposition': `attachment; filename="${projectName}.zip"`,
@@ -67,4 +77,3 @@ export async function GET() {
     max_size_mb: 50,
   })
 }
-
