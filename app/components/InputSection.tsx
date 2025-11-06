@@ -1,9 +1,9 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { useChatStore } from '../store/useChatStore'
+import { useChatStore, AIModelSelection } from '../store/useChatStore'
 import toast from 'react-hot-toast'
-import { FiSend, FiStopCircle, FiPaperclip, FiX, FiImage } from 'react-icons/fi'
+import { FiSend, FiStopCircle, FiPaperclip, FiX, FiImage, FiChevronDown } from 'react-icons/fi'
 import { motion, AnimatePresence } from 'framer-motion'
 
 interface InputSectionProps {
@@ -22,9 +22,11 @@ export default function InputSection({ onNewChat }: InputSectionProps) {
   const [prompt, setPrompt] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([])
+  const [showModelSelector, setShowModelSelector] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const { addMessage, updateLastMessage, currentDomain, messages } = useChatStore()
+  const dropdownRef = useRef<HTMLDivElement>(null)
+  const { addMessage, updateLastMessage, currentDomain, messages, selectedModel, setSelectedModel } = useChatStore()
 
   useEffect(() => {
     if (textareaRef.current) {
@@ -32,6 +34,41 @@ export default function InputSection({ onNewChat }: InputSectionProps) {
       textareaRef.current.style.height = textareaRef.current.scrollHeight + 'px'
     }
   }, [prompt])
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setShowModelSelector(false)
+      }
+    }
+
+    if (showModelSelector) {
+      document.addEventListener('mousedown', handleClickOutside)
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [showModelSelector])
+
+  const getModelLabel = (model: AIModelSelection) => {
+    switch (model) {
+      case 'auto':
+        return 'Auto (Smart)'
+      case 'chatgpt-5':
+        return 'ChatGPT-5'
+      case 'gemini-2.5-pro':
+        return 'Gemini 2.5 Pro'
+      default:
+        return 'Auto (Smart)'
+    }
+  }
+
+  const handleModelSelect = (model: AIModelSelection) => {
+    setSelectedModel(model)
+    setShowModelSelector(false)
+    toast.success(`Switched to ${getModelLabel(model)}`)
+  }
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files
@@ -124,7 +161,8 @@ export default function InputSection({ onNewChat }: InputSectionProps) {
           prompt: userPrompt,
           domain: currentDomain,
           chatHistory: messages,
-          files: filesData
+          files: filesData,
+          selectedAgent: selectedModel
         })
       })
 
@@ -137,6 +175,7 @@ export default function InputSection({ onNewChat }: InputSectionProps) {
       const decoder = new TextDecoder()
       let accumulatedText = ''
       let buffer = ''
+      let currentModelUsed = ''
 
       if (reader) {
         while (true) {
@@ -156,9 +195,16 @@ export default function InputSection({ onNewChat }: InputSectionProps) {
 
               try {
                 const parsed = JSON.parse(data)
+                
+                if (parsed.modelUsed) {
+                  currentModelUsed = parsed.modelUsed
+                  console.log(`[AI Model] Using: ${parsed.modelUsed}`)
+                  updateLastMessage(accumulatedText, currentModelUsed)
+                }
+                
                 if (parsed.text) {
                   accumulatedText += parsed.text
-                  updateLastMessage(accumulatedText)
+                  updateLastMessage(accumulatedText, currentModelUsed)
                 }
               } catch (e) {
                 console.warn('Failed to parse SSE chunk:', data)
@@ -254,6 +300,44 @@ export default function InputSection({ onNewChat }: InputSectionProps) {
         >
           <FiPaperclip className="w-5 h-5" />
         </button>
+
+        <div className="relative flex-shrink-0" ref={dropdownRef}>
+          <button
+            type="button"
+            onClick={() => setShowModelSelector(!showModelSelector)}
+            className="m-2 px-3 py-2 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors flex items-center gap-2"
+            title="Select AI Model"
+          >
+            <span>{getModelLabel(selectedModel)}</span>
+            <FiChevronDown className="w-4 h-4" />
+          </button>
+
+          <AnimatePresence>
+            {showModelSelector && (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                className="absolute bottom-full mb-2 left-0 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 overflow-hidden z-50"
+              >
+                {(['auto', 'chatgpt-5', 'gemini-2.5-pro'] as AIModelSelection[]).map((model) => (
+                  <button
+                    key={model}
+                    type="button"
+                    onClick={() => handleModelSelect(model)}
+                    className={`w-full text-left px-4 py-3 text-sm transition-colors ${
+                      selectedModel === model
+                        ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 font-medium'
+                        : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+                    }`}
+                  >
+                    {getModelLabel(model)}
+                  </button>
+                ))}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
 
         <textarea
           ref={textareaRef}

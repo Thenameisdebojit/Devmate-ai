@@ -1,11 +1,14 @@
 import { create } from 'zustand'
 
+export type AIModelSelection = 'auto' | 'chatgpt-5' | 'gemini-2.5-pro'
+
 export interface Message {
   id: string
   type: 'user' | 'assistant'
   content: string
   action?: 'generate' | 'explain' | 'rewrite' | 'fix'
   domain?: string
+  modelUsed?: string
   timestamp: number
 }
 
@@ -22,20 +25,23 @@ interface ChatStore {
   messages: Message[]
   lastRequest: LastRequest | null
   currentDomain: string
+  selectedModel: AIModelSelection
   addMessage: (message: Omit<Message, 'id' | 'timestamp'>) => void
   clearMessages: () => void
   exportConversation: () => void
-  updateLastMessage: (content: string) => void
+  updateLastMessage: (content: string, modelUsed?: string) => void
   setLastRequest: (request: LastRequest) => void
   getLastUserPrompt: () => string
   setMessages: (messages: Message[]) => void
   setDomain: (domain: string) => void
+  setSelectedModel: (model: AIModelSelection) => void
 }
 
 export const useChatStore = create<ChatStore>((set, get) => ({
   messages: [],
   lastRequest: null,
   currentDomain: typeof window !== 'undefined' ? localStorage.getItem('devmate-domain') || 'general' : 'general',
+  selectedModel: (typeof window !== 'undefined' ? localStorage.getItem('devmate-model') : null) as AIModelSelection || 'auto',
   
   addMessage: (message) => {
     const timestamp = Date.now()
@@ -49,11 +55,14 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     }))
   },
   
-  updateLastMessage: (content) => {
+  updateLastMessage: (content, modelUsed) => {
     set((state) => {
       const messages = [...state.messages]
       if (messages.length > 0) {
         messages[messages.length - 1].content = content
+        if (modelUsed) {
+          messages[messages.length - 1].modelUsed = modelUsed
+        }
       }
       return { messages }
     })
@@ -76,6 +85,13 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       localStorage.setItem('devmate-domain', domain)
     }
     set({ currentDomain: domain })
+  },
+  
+  setSelectedModel: (model) => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('devmate-model', model)
+    }
+    set({ selectedModel: model })
   },
   
   exportConversation: () => {

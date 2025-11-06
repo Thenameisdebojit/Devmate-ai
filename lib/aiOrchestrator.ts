@@ -35,7 +35,22 @@ export interface AIResponse {
   modelUsed: AIModel
 }
 
-export function chooseModel(prompt: string, action?: string, domain?: string): AIModel {
+export function chooseModel(
+  prompt: string, 
+  action?: string, 
+  domain?: string, 
+  userPreference?: string
+): AIModel {
+  // If user explicitly selected a model (not 'auto'), use it
+  if (userPreference && userPreference !== 'auto') {
+    if (userPreference === 'chatgpt-5') {
+      return 'openai:gpt-5'
+    } else if (userPreference === 'gemini-2.5-pro') {
+      return 'google:gemini-2.5-pro'
+    }
+  }
+  
+  // Auto mode: intelligent routing
   const lowerPrompt = prompt.toLowerCase()
   const lowerDomain = domain?.toLowerCase() || ''
   
@@ -129,9 +144,10 @@ export async function callAIModel(
 }
 
 export async function callAIModelWithFailover(
-  request: AIRequest
+  request: AIRequest,
+  userPreference?: string
 ): Promise<AIResponse> {
-  const primaryModel = chooseModel(request.prompt, request.action, request.domain)
+  const primaryModel = chooseModel(request.prompt, request.action, request.domain, userPreference)
   
   try {
     const text = await callAIModel(primaryModel, request)
@@ -173,9 +189,10 @@ export async function callAIModelWithFailover(
 }
 
 export async function* streamAIModelWithFailover(
-  request: AIRequest
+  request: AIRequest,
+  userPreference?: string
 ): AsyncGenerator<string, void, unknown> {
-  const primaryModel = chooseModel(request.prompt, request.action, request.domain)
+  const primaryModel = chooseModel(request.prompt, request.action, request.domain, userPreference)
   
   try {
     yield* streamAIModel(primaryModel, request)

@@ -6,7 +6,7 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY || '',
 })
 
-const USE_ORCHESTRATOR = process.env.USE_AI_ORCHESTRATOR === 'true'
+const USE_ORCHESTRATOR = process.env.USE_AI_ORCHESTRATOR !== 'false'
 
 const SYSTEM_INSTRUCTION = `You are an elite software engineer with 15+ years of experience. You write production-grade code that is:
 - Complete and fully functional with no placeholders or TODOs
@@ -42,7 +42,7 @@ function detectIntent(prompt: string) {
 
 export async function POST(req: NextRequest) {
   try {
-    const { prompt, action, code, instructions, error, domain, chatHistory, files } = await req.json()
+    const { prompt, action, code, instructions, error, domain, chatHistory, files, selectedAgent } = await req.json()
 
     if (!process.env.OPENAI_API_KEY) {
       return NextResponse.json(
@@ -185,7 +185,9 @@ Fixed code with brief explanation of changes.`
     
     // Use AI orchestrator if enabled, otherwise use direct OpenAI
     if (USE_ORCHESTRATOR && process.env.GEMINI_API_KEY) {
-      const selectedModel = chooseModel(userMessage, action, domain)
+      const selectedModel = chooseModel(userMessage, action, domain, selectedAgent)
+      
+      console.log(`[AI Orchestrator] User preference: ${selectedAgent || 'auto'} → Using model: ${selectedModel}`)
       
       const readableStream = new ReadableStream({
         async start(controller) {
@@ -207,7 +209,7 @@ Fixed code with brief explanation of changes.`
               maxTokens: 4096,
               action,
               domain,
-            })) {
+            }, selectedAgent)) {
               controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text })}\n\n`))
             }
             
