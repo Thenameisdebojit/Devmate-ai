@@ -55,12 +55,24 @@ export function chooseModel(
       return 'openai:gpt-5'
     } else if (userPreference === 'gemini-2.5-pro') {
       return 'google:gemini-2.5-pro'
+    } else if (userPreference === 'gemini-2.5-flash') {
+      return 'google:gemini-2.5-flash'
     }
   }
   
-  // Auto mode: intelligent routing
+  // Auto mode: intelligent routing with performance optimization
   const lowerPrompt = prompt.toLowerCase()
   const lowerDomain = domain?.toLowerCase() || ''
+  const promptLength = prompt.length
+  
+  // Short queries (< 100 chars) -> Gemini Flash for speed
+  const shortQuery = promptLength < 100
+  const simpleKeywords = ['hi', 'hello', 'what', 'how', 'why', 'explain', 'tell me', 'can you']
+  const isSimpleQuery = simpleKeywords.some(k => lowerPrompt.startsWith(k))
+  
+  if (shortQuery && isSimpleQuery && action !== 'generate') {
+    return 'google:gemini-2.5-flash'
+  }
   
   // Code generation and building tasks -> GPT-5
   const codeKeywords = ['code', 'build', 'create', 'generate', 'implement', 'function', 'class', 'backend', 'frontend', 'api', 'database', 'app', 'application', 'website', 'program']
@@ -80,16 +92,18 @@ export function chooseModel(
     return PREFERRED_GPT_MODEL === 'gpt-4o' ? 'openai:gpt-4o' : 'openai:gpt-5'
   }
   
-  // Reasoning, summaries, explanations -> Gemini 2.5 Pro
+  // Reasoning, summaries, explanations -> Gemini 2.5 Flash for speed
   const reasoningKeywords = ['explain', 'analyze', 'summarize', 'what is', 'how does', 'why', 'describe', 'compare']
   const hasReasoningKeywords = reasoningKeywords.some(k => lowerPrompt.includes(k))
   
   if (hasReasoningKeywords || action === 'explain') {
-    return 'google:gemini-2.5-pro'
+    return 'google:gemini-2.5-flash'
   }
   
-  // Default: use preferred GPT model for most tasks
-  return PREFERRED_GPT_MODEL === 'gpt-4o' ? 'openai:gpt-4o' : 'openai:gpt-5'
+  // Default: use Flash for general conversation, GPT for complex tasks
+  return promptLength > 200 || hasCodeKeywords 
+    ? (PREFERRED_GPT_MODEL === 'gpt-4o' ? 'openai:gpt-4o' : 'openai:gpt-5')
+    : 'google:gemini-2.5-flash'
 }
 
 export async function callAIModel(
@@ -166,21 +180,19 @@ export async function callAIModelWithFailover(
   } catch (error: any) {
     console.warn(`Primary model ${primaryModel} failed, attempting failover:`, error.message)
     
-    // Smart failover logic
-    // If primary is GPT-5, try GPT-4o first, then Gemini
-    // If primary is GPT-4o, try GPT-5 first, then Gemini
-    // If primary is Gemini, try preferred GPT model
-    
+    // Smart failover logic with Flash as fast alternative
     const fallbackModels: AIModel[] = []
     
     if (primaryModel === 'openai:gpt-5') {
-      fallbackModels.push('openai:gpt-4o', 'google:gemini-2.5-pro')
+      fallbackModels.push('openai:gpt-4o', 'google:gemini-2.5-flash', 'google:gemini-2.5-pro')
     } else if (primaryModel === 'openai:gpt-4o') {
-      fallbackModels.push('openai:gpt-5', 'google:gemini-2.5-pro')
+      fallbackModels.push('openai:gpt-5', 'google:gemini-2.5-flash', 'google:gemini-2.5-pro')
+    } else if (primaryModel === 'google:gemini-2.5-pro') {
+      fallbackModels.push('google:gemini-2.5-flash', PREFERRED_GPT_MODEL === 'gpt-4o' ? 'openai:gpt-4o' : 'openai:gpt-5')
+    } else if (primaryModel === 'google:gemini-2.5-flash') {
+      fallbackModels.push('google:gemini-2.5-pro', PREFERRED_GPT_MODEL === 'gpt-4o' ? 'openai:gpt-4o' : 'openai:gpt-5')
     } else {
-      fallbackModels.push(
-        PREFERRED_GPT_MODEL === 'gpt-4o' ? 'openai:gpt-4o' : 'openai:gpt-5'
-      )
+      fallbackModels.push('google:gemini-2.5-flash', PREFERRED_GPT_MODEL === 'gpt-4o' ? 'openai:gpt-4o' : 'openai:gpt-5')
     }
     
     // Try each fallback model
@@ -210,17 +222,19 @@ export async function* streamAIModelWithFailover(
   } catch (error: any) {
     console.warn(`Primary streaming model ${primaryModel} failed, attempting failover:`, error.message)
     
-    // Smart failover logic (same as non-streaming)
+    // Smart failover logic with Flash as fast alternative
     const fallbackModels: AIModel[] = []
     
     if (primaryModel === 'openai:gpt-5') {
-      fallbackModels.push('openai:gpt-4o', 'google:gemini-2.5-pro')
+      fallbackModels.push('openai:gpt-4o', 'google:gemini-2.5-flash', 'google:gemini-2.5-pro')
     } else if (primaryModel === 'openai:gpt-4o') {
-      fallbackModels.push('openai:gpt-5', 'google:gemini-2.5-pro')
+      fallbackModels.push('openai:gpt-5', 'google:gemini-2.5-flash', 'google:gemini-2.5-pro')
+    } else if (primaryModel === 'google:gemini-2.5-pro') {
+      fallbackModels.push('google:gemini-2.5-flash', PREFERRED_GPT_MODEL === 'gpt-4o' ? 'openai:gpt-4o' : 'openai:gpt-5')
+    } else if (primaryModel === 'google:gemini-2.5-flash') {
+      fallbackModels.push('google:gemini-2.5-pro', PREFERRED_GPT_MODEL === 'gpt-4o' ? 'openai:gpt-4o' : 'openai:gpt-5')
     } else {
-      fallbackModels.push(
-        PREFERRED_GPT_MODEL === 'gpt-4o' ? 'openai:gpt-4o' : 'openai:gpt-5'
-      )
+      fallbackModels.push('google:gemini-2.5-flash', PREFERRED_GPT_MODEL === 'gpt-4o' ? 'openai:gpt-4o' : 'openai:gpt-5')
     }
     
     // Try each fallback model

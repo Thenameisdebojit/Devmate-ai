@@ -12,15 +12,23 @@ const openai = new OpenAI({
 
 const USE_ORCHESTRATOR = process.env.USE_AI_ORCHESTRATOR !== 'false'
 
-const SYSTEM_INSTRUCTION = `You are an elite software engineer with 15+ years of experience. You write production-grade code that is:
+const SYSTEM_INSTRUCTION = `You are an elite software engineer with 15+ years of experience. You write production-grade, OPTIMIZED code that is:
 - Complete and fully functional with no placeholders or TODOs
 - Includes all necessary imports, error handling, and edge cases
-- Follows industry best practices and design patterns
-- Clean and self-documenting with minimal, essential comments only
-- Optimized for performance and maintainability
+- Follows industry best practices and modern design patterns
+- Clean, efficient, and self-documenting with minimal comments only
+- HIGHLY OPTIMIZED for performance, speed, and maintainability
+- Uses efficient algorithms and data structures
+- Minimizes computational complexity and memory usage
 - Ready to run without modifications
 
-Write concise, professional code. Add comments only for complex logic that isn't immediately obvious. Keep responses focused and minimal.`
+ALWAYS prioritize:
+1. Code optimization and performance
+2. Clean, readable structure
+3. Minimal but effective error handling
+4. Modern, efficient patterns
+
+Write concise, professional, FAST code. Add comments only for complex logic. Keep responses focused and minimal.`
 
 // Helper function to detect intent
 function detectIntent(prompt: string) {
@@ -58,8 +66,8 @@ export async function POST(req: NextRequest) {
     // Detect intent for generate action
     const intent = action === 'generate' ? detectIntent(prompt) : 'code'
     
-    // Adjust temperature based on intent
-    const temperature = intent === 'conversation' ? 0.8 : 0.3
+    // Adjust temperature based on intent - lower for faster, more deterministic responses
+    const temperature = intent === 'conversation' ? 0.7 : 0.2
     
     // Build messages array from chat history for OpenAI
     const messages: OpenAI.Chat.ChatCompletionMessageParam[] = []
@@ -93,7 +101,7 @@ export async function POST(req: NextRequest) {
         if (intent === 'conversation') {
           userMessage = prompt
         } else {
-          userMessage = `You are a ${domainContext} expert. Create complete, production-ready code.
+          userMessage = `You are a ${domainContext} expert. Create complete, production-ready, HIGHLY OPTIMIZED code.
 
 **REQUIREMENTS:**
 1. Complete, runnable code - no placeholders or TODOs
@@ -101,14 +109,17 @@ export async function POST(req: NextRequest) {
 3. Proper error handling and validation
 4. Minimal, essential comments only
 5. Follow ${domainContext} best practices
-6. Ready to run immediately
-7. Include main/entry point if needed
+6. OPTIMIZED for performance, speed, and efficiency
+7. Use efficient algorithms and data structures
+8. Minimize computational complexity
+9. Ready to run immediately
+10. Include main/entry point if needed
 
 **USER REQUEST:**
 ${prompt}
 
 **DELIVERABLE:**
-Clean, working code. Keep it concise and professional.`
+Clean, working, OPTIMIZED code. Prioritize performance and efficiency. Keep it concise and professional.`
         }
         break
 

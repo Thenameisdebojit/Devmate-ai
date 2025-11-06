@@ -60,6 +60,8 @@ export default function InputSection({ onNewChat }: InputSectionProps) {
         return 'GPT-5'
       case 'gemini-2.5-pro':
         return 'Gemini 2.5 Pro'
+      case 'gemini-2.5-flash':
+        return 'Gemini 2.5 Flash'
       default:
         return 'Auto (Smart)'
     }
@@ -73,6 +75,8 @@ export default function InputSection({ onNewChat }: InputSectionProps) {
         return <SiOpenai className="w-4 h-4" />
       case 'gemini-2.5-pro':
         return <SiGoogle className="w-4 h-4" />
+      case 'gemini-2.5-flash':
+        return <FiCpu className="w-4 h-4 text-blue-500" />
       default:
         return <FiZap className="w-4 h-4" />
     }
@@ -190,42 +194,55 @@ export default function InputSection({ onNewChat }: InputSectionProps) {
       let accumulatedText = ''
       let buffer = ''
       let currentModelUsed = ''
+      let lastChunkTime = Date.now()
+      const TIMEOUT_MS = 60000
 
       if (reader) {
-        while (true) {
-          const { done, value } = await reader.read()
-          if (done) break
+        const readWithTimeout = async () => {
+          while (true) {
+            const timeoutPromise = new Promise((_, reject) => 
+              setTimeout(() => reject(new Error('Stream timeout - no data received for 60 seconds')), TIMEOUT_MS)
+            )
+            
+            const readPromise = reader.read()
+            const { done, value } = await Promise.race([readPromise, timeoutPromise]) as ReadableStreamReadResult<Uint8Array>
+            
+            if (done) break
+            lastChunkTime = Date.now()
 
-          const chunk = decoder.decode(value, { stream: true })
-          buffer += chunk
-          
-          const lines = buffer.split('\n')
-          buffer = lines.pop() || ''
+            const chunk = decoder.decode(value, { stream: true })
+            buffer += chunk
+            
+            const lines = buffer.split('\n')
+            buffer = lines.pop() || ''
 
-          for (const line of lines) {
-            if (line.startsWith('data: ')) {
-              const data = line.slice(6).trim()
-              if (data === '[DONE]') break
+            for (const line of lines) {
+              if (line.startsWith('data: ')) {
+                const data = line.slice(6).trim()
+                if (data === '[DONE]') break
 
-              try {
-                const parsed = JSON.parse(data)
-                
-                if (parsed.modelUsed) {
-                  currentModelUsed = parsed.modelUsed
-                  console.log(`[AI Model] Using: ${parsed.modelUsed}`)
-                  updateLastMessage(accumulatedText, currentModelUsed)
+                try {
+                  const parsed = JSON.parse(data)
+                  
+                  if (parsed.modelUsed) {
+                    currentModelUsed = parsed.modelUsed
+                    console.log(`[AI Model] Using: ${parsed.modelUsed}`)
+                    updateLastMessage(accumulatedText, currentModelUsed)
+                  }
+                  
+                  if (parsed.text) {
+                    accumulatedText += parsed.text
+                    updateLastMessage(accumulatedText, currentModelUsed)
+                  }
+                } catch (e) {
+                  console.warn('Failed to parse SSE chunk:', data)
                 }
-                
-                if (parsed.text) {
-                  accumulatedText += parsed.text
-                  updateLastMessage(accumulatedText, currentModelUsed)
-                }
-              } catch (e) {
-                console.warn('Failed to parse SSE chunk:', data)
               }
             }
           }
         }
+        
+        await readWithTimeout()
       }
     } catch (err: any) {
       toast.error(err.message || 'Failed to process request')
@@ -336,7 +353,7 @@ export default function InputSection({ onNewChat }: InputSectionProps) {
                 className="absolute bottom-full mb-2 left-0 w-56 bg-white dark:bg-gray-800 rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden z-50"
               >
                 <div className="p-2">
-                  {(['auto', 'chatgpt-5', 'gemini-2.5-pro'] as AIModelSelection[]).map((model) => (
+                  {(['auto', 'chatgpt-5', 'gemini-2.5-flash', 'gemini-2.5-pro'] as AIModelSelection[]).map((model) => (
                     <button
                       key={model}
                       type="button"
@@ -358,8 +375,11 @@ export default function InputSection({ onNewChat }: InputSectionProps) {
                         {model === 'chatgpt-5' && (
                           <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Advanced reasoning</div>
                         )}
+                        {model === 'gemini-2.5-flash' && (
+                          <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Fast & efficient</div>
+                        )}
                         {model === 'gemini-2.5-pro' && (
-                          <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Google AI</div>
+                          <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Google AI Pro</div>
                         )}
                       </div>
                       {selectedModel === model && (
