@@ -127,6 +127,7 @@ export async function callAIModel(
       const response = await openai.chat.completions.create({
         model: modelName,
         messages,
+        temperature,
         max_completion_tokens: maxTokens,
       })
       
@@ -273,6 +274,7 @@ export async function* streamAIModel(
     const stream = await openai.chat.completions.create({
       model: modelName,
       messages,
+      temperature,
       max_completion_tokens: maxTokens,
       stream: true,
     })

@@ -200,44 +200,54 @@ export default function InputSection({ onNewChat }: InputSectionProps) {
       if (reader) {
         const readWithTimeout = async () => {
           while (true) {
-            const timeoutPromise = new Promise((_, reject) => 
-              setTimeout(() => reject(new Error('Stream timeout - no data received for 60 seconds')), TIMEOUT_MS)
-            )
+            let timeoutId: NodeJS.Timeout | null = null
+            
+            const timeoutPromise = new Promise((_, reject) => {
+              timeoutId = setTimeout(() => reject(new Error('Stream timeout - no data received for 60 seconds')), TIMEOUT_MS)
+            })
             
             const readPromise = reader.read()
-            const { done, value } = await Promise.race([readPromise, timeoutPromise]) as ReadableStreamReadResult<Uint8Array>
             
-            if (done) break
-            lastChunkTime = Date.now()
+            try {
+              const { done, value } = await Promise.race([readPromise, timeoutPromise]) as ReadableStreamReadResult<Uint8Array>
+              
+              if (timeoutId) clearTimeout(timeoutId)
+              
+              if (done) break
+              lastChunkTime = Date.now()
 
-            const chunk = decoder.decode(value, { stream: true })
-            buffer += chunk
-            
-            const lines = buffer.split('\n')
-            buffer = lines.pop() || ''
+              const chunk = decoder.decode(value, { stream: true })
+              buffer += chunk
+              
+              const lines = buffer.split('\n')
+              buffer = lines.pop() || ''
 
-            for (const line of lines) {
-              if (line.startsWith('data: ')) {
-                const data = line.slice(6).trim()
-                if (data === '[DONE]') break
+              for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                  const data = line.slice(6).trim()
+                  if (data === '[DONE]') break
 
-                try {
-                  const parsed = JSON.parse(data)
-                  
-                  if (parsed.modelUsed) {
-                    currentModelUsed = parsed.modelUsed
-                    console.log(`[AI Model] Using: ${parsed.modelUsed}`)
-                    updateLastMessage(accumulatedText, currentModelUsed)
+                  try {
+                    const parsed = JSON.parse(data)
+                    
+                    if (parsed.modelUsed) {
+                      currentModelUsed = parsed.modelUsed
+                      console.log(`[AI Model] Using: ${parsed.modelUsed}`)
+                      updateLastMessage(accumulatedText, currentModelUsed)
+                    }
+                    
+                    if (parsed.text) {
+                      accumulatedText += parsed.text
+                      updateLastMessage(accumulatedText, currentModelUsed)
+                    }
+                  } catch (e) {
+                    console.warn('Failed to parse SSE chunk:', data)
                   }
-                  
-                  if (parsed.text) {
-                    accumulatedText += parsed.text
-                    updateLastMessage(accumulatedText, currentModelUsed)
-                  }
-                } catch (e) {
-                  console.warn('Failed to parse SSE chunk:', data)
                 }
               }
+            } catch (error) {
+              if (timeoutId) clearTimeout(timeoutId)
+              throw error
             }
           }
         }
