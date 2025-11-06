@@ -81,7 +81,14 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
   checkAuth: async () => {
     try {
       set({ isLoading: true })
-      const response = await fetch('/api/auth/me')
+      
+      const timeout = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Auth check timeout')), 5000)
+      )
+      
+      const fetchPromise = fetch('/api/auth/me')
+      
+      const response = await Promise.race([fetchPromise, timeout]) as Response
       
       if (response.ok) {
         const data = await response.json()
