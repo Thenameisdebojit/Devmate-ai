@@ -46,16 +46,6 @@ A modern, full-stack AI coding assistant powered by **OpenAI GPT-5** and **Googl
 - **Framer Motion Animations**: Smooth microinteractions on messages, buttons, and modal components
 - **Enhanced Accessibility**: ARIA labels, keyboard navigation, focus management, WCAG AA contrast
 
-### 🚀 Performance
-- **Lazy Loading**: Dynamic imports for Monaco Editor to reduce initial bundle size
-- **Code Splitting**: Route-level code splitting for optimal performance
-- **Optimized Assets**: Compressed images and minimal initial bundle
-
-### 🛠️ Developer Experience
-- **TypeScript**: Full type safety across all components
-- **Modular Architecture**: Clean component structure with separation of concerns
-- **Reusable Utilities**: Shared utilities for prompt templates and theme management
-
 ## 🚀 Features
 
 ### 🤖 Hybrid AI System

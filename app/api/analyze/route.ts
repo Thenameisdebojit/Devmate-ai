@@ -1,16 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 
-export const config = {
-  api: {
-    bodyParser: false,
-  },
-}
+// ✅ Updated for Next.js 15 — use new export style
+export const runtime = 'nodejs' // or 'edge' if needed
+export const dynamic = 'force-dynamic' // ensures request parsing works
+
+// Next.js now automatically handles the request stream, so you don't need bodyParser config.
 
 export async function POST(req: NextRequest) {
   try {
     const currentUser = await getCurrentUser()
-    
+
     if (!currentUser) {
       return NextResponse.json(
         { error: 'Not authenticated' },
@@ -35,12 +35,12 @@ export async function POST(req: NextRequest) {
       if (file instanceof File) {
         const bytes = await file.arrayBuffer()
         const buffer = Buffer.from(bytes)
-        
+
         fileData.push({
           name: file.name,
           type: file.type,
           size: file.size,
-          data: buffer.toString('base64')
+          data: buffer.toString('base64'),
         })
       }
     }
@@ -49,20 +49,20 @@ export async function POST(req: NextRequest) {
       files: fileData.map(f => ({
         name: f.name,
         type: f.type,
-        size: f.size
+        size: f.size,
       })),
       prompt,
       analysis: 'Placeholder: Image analysis will be integrated with Gemini Vision API',
       suggestions: [
         'Upload functionality is working correctly',
         'Files are being processed and converted to base64',
-        'Ready for AI model integration'
-      ]
+        'Ready for AI model integration',
+      ],
     }
 
     return NextResponse.json({
       success: true,
-      result: analysisResult
+      result: analysisResult,
     })
   } catch (error: any) {
     console.error('File analysis error:', error)
