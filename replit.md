@@ -2,9 +2,20 @@
 
 ## Overview
 
-Devmate v2.0 is a full-stack AI coding assistant built with Next.js 14, combining the power of OpenAI's GPT-5 and Google's Gemini 2.5 Pro models. The application provides intelligent code generation, explanation, rewriting, and debugging capabilities through a ChatGPT-like interface with industrial-grade design.
+Devmate v2.0 is a full-stack AI coding assistant built with Next.js 14, combining the power of OpenAI's GPT-5, Google's Gemini 2.5 Pro, and Gemini 2.5 Flash models. The application provides intelligent code generation, explanation, rewriting, and debugging capabilities through a ChatGPT-like interface with industrial-grade design.
 
-The system features hybrid AI orchestration that intelligently routes requests between GPT-5 and Gemini based on query complexity, domain context, and model availability. Users can interact through a responsive glassmorphism UI with real-time streaming responses, Monaco code editor integration, and comprehensive chat history management.
+The system features hybrid AI orchestration that intelligently routes requests between GPT-5, Gemini Pro, and Gemini Flash based on query complexity, domain context, and model availability. Users can interact through a responsive glassmorphism UI with real-time streaming responses, Monaco code editor integration, and comprehensive chat history management.
+
+## Recent Changes (November 2025)
+
+### Performance Optimizations & Gemini 2.5 Flash Integration
+- **Added Gemini 2.5 Flash**: New ultra-fast model option for quick responses
+- **Optimized Model Selection**: Auto mode now intelligently uses Flash for simple queries and explanations, GPT-5 for complex code tasks
+- **Improved Response Speed**: Lowered temperature settings (0.2 for code, 0.7 for conversation) for faster, more deterministic responses
+- **Enhanced System Instructions**: Updated prompts to emphasize code optimization and performance
+- **Timeout Handling**: Added 60-second timeout with proper cleanup to prevent hanging streams
+- **Better Failover**: Flash included in all failover chains for improved reliability
+- **Optimized Code Generation**: All generated code now prioritizes performance, efficiency, and modern best practices
 
 ## User Preferences
 
@@ -74,14 +85,22 @@ Preferred communication style: Simple, everyday language.
 ### AI Integration
 
 **Primary Models**:
-- OpenAI GPT-5 (default for complex reasoning)
-- Google Gemini 2.5 Pro (fallback and alternative)
+- OpenAI GPT-5 (default for complex reasoning and code generation)
+- Google Gemini 2.5 Flash (optimized for speed and simple queries)
+- Google Gemini 2.5 Pro (advanced reasoning and explanations)
 
-**Model Selection Logic**:
-- Short queries (<50 chars) → Gemini Flash for speed
+**Model Selection Logic** (Auto Mode):
+- Short/simple queries (<100 chars) → Gemini Flash for speed
 - Code generation/debugging → GPT-5 for accuracy
-- Explanations → Gemini Pro for detail
+- Explanations/reasoning → Gemini Flash for fast responses
+- Web Development domain → GPT-5 for production-grade code
+- Complex tasks (>200 chars) → GPT-5 for thoroughness
 - Domain-specific contexts influence model choice
+
+**Manual Model Selection**: Users can override auto-selection and choose:
+- GPT-5 for maximum code quality
+- Gemini 2.5 Flash for fastest responses
+- Gemini 2.5 Pro for detailed explanations
 
 **Prompt Engineering**:
 - YAML-based templates stored in `/config/prompts/`
