@@ -2,7 +2,11 @@ import { SignJWT, jwtVerify } from 'jose'
 import { cookies } from 'next/headers'
 import bcrypt from 'bcryptjs'
 
-const SECRET_KEY = process.env.JWT_SECRET || 'devmate-secret-key-change-in-production'
+if (!process.env.JWT_SECRET) {
+  throw new Error('JWT_SECRET environment variable is required')
+}
+
+const SECRET_KEY = process.env.JWT_SECRET
 const secret = new TextEncoder().encode(SECRET_KEY)
 
 export async function createToken(userId: string, email: string) {

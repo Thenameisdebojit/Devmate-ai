@@ -7,12 +7,20 @@ import { GoogleGenAI } from '@google/genai'
 // DON'T DELETE THIS COMMENT - from blueprint:javascript_gemini
 // Note that the newest Gemini model series is "gemini-2.5-flash" or "gemini-2.5-pro"
 
+if (!process.env.OPENAI_API_KEY) {
+  throw new Error('OPENAI_API_KEY environment variable is required')
+}
+
+if (!process.env.GEMINI_API_KEY) {
+  throw new Error('GEMINI_API_KEY environment variable is required')
+}
+
 const openai = new OpenAI({ 
-  apiKey: process.env.OPENAI_API_KEY || '' 
+  apiKey: process.env.OPENAI_API_KEY
 })
 
 const gemini = new GoogleGenAI({ 
-  apiKey: process.env.GEMINI_API_KEY || '' 
+  apiKey: process.env.GEMINI_API_KEY
 })
 
 // Environment-based model preference

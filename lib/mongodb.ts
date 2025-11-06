@@ -1,10 +1,10 @@
 import mongoose from 'mongoose'
 
-const MONGODB_URI = process.env.MONGODB_URI || ''
-
-if (!MONGODB_URI) {
-  console.warn('Warning: MONGODB_URI is not defined in environment variables')
+if (!process.env.MONGODB_URI) {
+  throw new Error('MONGODB_URI environment variable is required')
 }
+
+const MONGODB_URI = process.env.MONGODB_URI
 
 interface CachedConnection {
   conn: typeof mongoose | null
