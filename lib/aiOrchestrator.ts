@@ -8,7 +8,7 @@ import { GoogleGenAI } from '@google/genai'
 // Note that the newest Gemini model series is "gemini-2.5-flash" or "gemini-2.5-pro"
 
 // DON'T DELETE THIS COMMENT - from blueprint:javascript_xai
-// Grok models available: grok-2-1212 (text-only, 131k context), grok-2-vision-1212 (vision support)
+// Grok models available: grok-4 (latest, most intelligent), grok-2-1212 (text-only, 131k context), grok-2-vision-1212 (vision support)
 
 if (!process.env.OPENAI_API_KEY) {
   throw new Error('OPENAI_API_KEY environment variable is required')
@@ -39,7 +39,7 @@ if (process.env.XAI_API_KEY) {
 // Environment-based model preference
 const PREFERRED_GPT_MODEL = process.env.PREFERRED_GPT_MODEL === 'gpt-4o' ? 'gpt-4o' : 'gpt-5'
 
-export type AIModel = 'openai:gpt-5' | 'openai:gpt-4o' | 'google:gemini-2.5-pro' | 'google:gemini-2.5-flash' | 'xai:grok-2-1212' | 'xai:grok-vision-beta'
+export type AIModel = 'openai:gpt-5' | 'openai:gpt-4o' | 'google:gemini-2.5-pro' | 'google:gemini-2.5-flash' | 'xai:grok-4' | 'xai:grok-2-1212' | 'xai:grok-vision-beta'
 
 export interface AIRequest {
   prompt: string
@@ -70,6 +70,8 @@ export function chooseModel(
       return 'google:gemini-2.5-pro'
     } else if (userPreference === 'gemini-2.5-flash') {
       return 'google:gemini-2.5-flash'
+    } else if (userPreference === 'grok-4') {
+      return 'xai:grok-4'
     } else if (userPreference === 'grok-2-1212') {
       return 'xai:grok-2-1212'
     } else if (userPreference === 'grok-vision-beta') {
@@ -192,7 +194,7 @@ export async function callAIModel(
       
       messages.push({ role: 'user', content: prompt })
       
-      const modelName = model.includes('vision') ? 'grok-2-vision-1212' : 'grok-2-1212'
+      const modelName = model.includes('grok-4') ? 'grok-4' : model.includes('vision') ? 'grok-2-vision-1212' : 'grok-2-1212'
       
       const response = await xai.chat.completions.create({
         model: modelName,
@@ -371,7 +373,7 @@ export async function* streamAIModel(
     
     messages.push({ role: 'user', content: prompt })
     
-    const modelName = model.includes('vision') ? 'grok-2-vision-1212' : 'grok-2-1212'
+    const modelName = model.includes('grok-4') ? 'grok-4' : model.includes('vision') ? 'grok-2-vision-1212' : 'grok-2-1212'
     
     const stream = await xai.chat.completions.create({
       model: modelName,

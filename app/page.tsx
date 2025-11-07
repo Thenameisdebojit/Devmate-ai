@@ -192,7 +192,7 @@ export default function Home() {
 
         {/* Main Chat Area */}
         <div className={`flex-1 flex flex-col transition-all duration-300 ${isSidebarOpen ? 'lg:ml-80' : 'lg:ml-0'}`}>
-          <div className="border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
+          <div className="sticky top-0 z-30 border-b border-gray-200 dark:border-gray-800 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm">
             <div className="max-w-4xl mx-auto px-4 py-3 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-4">
               <DomainSelector value={currentDomain} onChange={setDomain} />
               <ThemeToggle />
@@ -210,7 +210,7 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="border-t border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
+          <div className="sticky bottom-0 z-30 border-t border-gray-200 dark:border-gray-800 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm">
             <div className="max-w-4xl mx-auto px-4 py-4">
               <InputSection onNewChat={handleNewChat} />
             </div>

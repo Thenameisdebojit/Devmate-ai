@@ -3,6 +3,7 @@
 import { useEffect, useRef } from 'react'
 import { useChatStore } from '../store/useChatStore'
 import MessageBubble from './MessageBubble'
+import ShareChatButton from './ShareChatButton'
 
 export default function ChatWindow() {
   const { messages } = useChatStore()
@@ -35,6 +36,9 @@ export default function ChatWindow() {
         </div>
       ) : (
         <div className="max-w-4xl mx-auto px-4 py-6">
+          <div className="flex justify-end mb-4">
+            <ShareChatButton messages={messages} />
+          </div>
           {messages.map((message) => (
             <MessageBubble key={message.id} message={message} />
           ))}

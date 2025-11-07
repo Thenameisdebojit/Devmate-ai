@@ -2,10 +2,11 @@
 
 import { Message } from '../store/useChatStore'
 import CopyButton from './CopyButton'
-import { FiUser } from 'react-icons/fi'
+import { FiUser, FiEdit2 } from 'react-icons/fi'
 import ReactMarkdown from 'react-markdown'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { vscDarkPlus, oneLight } from 'react-syntax-highlighter/dist/cjs/styles/prism'
+import { useState } from 'react'
 
 interface MessageBubbleProps {
   message: Message
@@ -13,6 +14,7 @@ interface MessageBubbleProps {
 
 export default function MessageBubble({ message }: MessageBubbleProps) {
   const isUser = message.type === 'user'
+  const [isEditing, setIsEditing] = useState(false)
 
   return (
     <div
@@ -44,7 +46,14 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
             </span>
             {!isUser && message.modelUsed && (
               <span className="text-xs px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 font-medium">
-                {message.modelUsed.includes('gpt') ? '⚡ GPT-5' : '🔮 Gemini'}
+                {message.modelUsed.includes('gpt-5') ? '⚡ GPT-5' : 
+                 message.modelUsed.includes('gpt-4') ? '⚡ GPT-4o' :
+                 message.modelUsed.includes('grok-4') ? '🚀 Grok 4' :
+                 message.modelUsed.includes('grok-2') ? '🤖 Grok 2' :
+                 message.modelUsed.includes('grok-vision') ? '👁️ Grok Vision' :
+                 message.modelUsed.includes('gemini-2.5-pro') ? '🔮 Gemini Pro' :
+                 message.modelUsed.includes('gemini-2.5-flash') ? '⚡ Gemini Flash' : 
+                 '🤖 AI'}
               </span>
             )}
           </div>
@@ -60,7 +69,7 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
                     
                     return !isInline && match ? (
                       <div className="relative group/code my-4 rounded-xl overflow-hidden shadow-xl border border-gray-200 dark:border-gray-700">
-                        <div className="absolute right-2 top-2 z-10">
+                        <div className="sticky top-2 right-2 float-right z-10 mb-[-2rem]">
                           <CopyButton text={codeString} />
                         </div>
                         <SyntaxHighlighter
@@ -116,9 +125,19 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
             )}
           </div>
           
-          {!isUser && message.content && (
+          {message.content && (
             <div className="flex gap-2 mt-3 opacity-0 group-hover:opacity-100 transition-opacity">
               <CopyButton text={message.content} />
+              {isUser && (
+                <button
+                  onClick={() => setIsEditing(!isEditing)}
+                  className="flex items-center gap-2 px-3 py-1.5 bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 rounded-lg text-sm transition-colors"
+                  title="Edit message (coming soon)"
+                >
+                  <FiEdit2 className="w-4 h-4" />
+                  Edit
+                </button>
+              )}
             </div>
           )}
         </div>
