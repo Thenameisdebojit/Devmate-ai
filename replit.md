@@ -11,7 +11,7 @@ A modern, full-stack AI coding assistant powered by OpenAI GPT-5 and Google Gemi
 
 ## Recent Changes
 
-### November 7, 2025 - Vercel to Replit Migration
+### November 7, 2025 - Vercel to Replit Migration & Grok AI Integration
 - Migrated entire project from Vercel to Replit environment
 - Configured all required environment variables in Replit Secrets (OPENAI_API_KEY, GEMINI_API_KEY, MONGODB_URI, JWT_SECRET)
 - Set up development workflow (npm run dev on port 5000 with 0.0.0.0 binding)
@@ -29,6 +29,13 @@ A modern, full-stack AI coding assistant powered by OpenAI GPT-5 and Google Gemi
   - `npm run build` completes successfully with expected dynamic route warnings
   - `npm run start` starts production server on port 5000
   - Production health check verified: API returns `{"status":"ok"}`
+- **Integrated Grok AI (xAI) as optional third AI provider**
+  - Added xAI API support using OpenAI SDK with custom base URL (https://api.x.ai/v1)
+  - Implemented two Grok models: grok-2-1212 (text-only) and grok-vision-beta (vision support)
+  - Made XAI_API_KEY optional - app works without it for existing OpenAI/Gemini users
+  - Added runtime validation with helpful error messages if Grok selected without API key
+  - Updated frontend model selector to include Grok options
+  - Backward compatible - no breaking changes for existing users
 - Migration complete - ready for production deployment via Replit Publish button
 
 ## Environment Configuration
@@ -40,6 +47,7 @@ A modern, full-stack AI coding assistant powered by OpenAI GPT-5 and Google Gemi
 - `JWT_SECRET` - Secret key for JWT authentication (32+ characters)
 
 ### Optional Environment Variables
+- `XAI_API_KEY` - xAI API key for Grok models (optional, only needed if using Grok)
 - `USE_AI_ORCHESTRATOR` - Set to 'true' to enable hybrid AI routing (default: true)
 - `PREFERRED_GPT_MODEL` - Choose between 'gpt-4o' or 'gpt-5' (default: 'gpt-5')
 
@@ -55,6 +63,7 @@ A modern, full-stack AI coding assistant powered by OpenAI GPT-5 and Google Gemi
 - **AI Models**: 
   - OpenAI GPT-5 (code generation, building, complex tasks)
   - Google Gemini 2.5 Pro/Flash (reasoning, explanations, analysis)
+  - Grok AI (xAI) - Optional: grok-2-1212 (text), grok-vision-beta (vision)
 - **Code Editor**: Monaco Editor (lazy-loaded)
 - **Animations**: Framer Motion
 - **Notifications**: React Hot Toast
