@@ -7,6 +7,9 @@ import { GoogleGenAI } from '@google/genai'
 // DON'T DELETE THIS COMMENT - from blueprint:javascript_gemini
 // Note that the newest Gemini model series is "gemini-2.5-flash" or "gemini-2.5-pro"
 
+// DON'T DELETE THIS COMMENT - from blueprint:javascript_xai
+// Grok models available: grok-2-1212 (text-only, 131k context), grok-2-vision-1212 (vision support)
+
 if (!process.env.OPENAI_API_KEY) {
   throw new Error('OPENAI_API_KEY environment variable is required')
 }
@@ -23,10 +26,20 @@ const gemini = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY
 })
 
+// DON'T DELETE THIS COMMENT - from blueprint:javascript_xai
+// xAI client is optional - only initialized if XAI_API_KEY is available
+let xai: OpenAI | null = null
+if (process.env.XAI_API_KEY) {
+  xai = new OpenAI({ 
+    baseURL: 'https://api.x.ai/v1',
+    apiKey: process.env.XAI_API_KEY
+  })
+}
+
 // Environment-based model preference
 const PREFERRED_GPT_MODEL = process.env.PREFERRED_GPT_MODEL === 'gpt-4o' ? 'gpt-4o' : 'gpt-5'
 
-export type AIModel = 'openai:gpt-5' | 'openai:gpt-4o' | 'google:gemini-2.5-pro' | 'google:gemini-2.5-flash'
+export type AIModel = 'openai:gpt-5' | 'openai:gpt-4o' | 'google:gemini-2.5-pro' | 'google:gemini-2.5-flash' | 'xai:grok-2-1212' | 'xai:grok-vision-beta'
 
 export interface AIRequest {
   prompt: string
@@ -57,6 +70,10 @@ export function chooseModel(
       return 'google:gemini-2.5-pro'
     } else if (userPreference === 'gemini-2.5-flash') {
       return 'google:gemini-2.5-flash'
+    } else if (userPreference === 'grok-2-1212') {
+      return 'xai:grok-2-1212'
+    } else if (userPreference === 'grok-vision-beta') {
+      return 'xai:grok-vision-beta'
     }
   }
   
@@ -160,6 +177,31 @@ export async function callAIModel(
       const response = await gemini.models.generateContent(requestParams)
       
       return response.text || ''
+    }
+    
+    if (model.startsWith('xai')) {
+      if (!xai) {
+        throw new Error('XAI_API_KEY not configured. Please add your xAI API key to use Grok models.')
+      }
+      
+      const messages: OpenAI.Chat.ChatCompletionMessageParam[] = []
+      
+      if (systemInstruction) {
+        messages.push({ role: 'system', content: systemInstruction })
+      }
+      
+      messages.push({ role: 'user', content: prompt })
+      
+      const modelName = model.includes('vision') ? 'grok-2-vision-1212' : 'grok-2-1212'
+      
+      const response = await xai.chat.completions.create({
+        model: modelName,
+        messages,
+        temperature,
+        max_tokens: maxTokens,
+      })
+      
+      return response.choices[0]?.message?.content || ''
     }
     
     throw new Error(`Unsupported model: ${model}`)
@@ -312,6 +354,35 @@ export async function* streamAIModel(
     
     for await (const chunk of response) {
       const text = chunk.text || ''
+      if (text) {
+        yield text
+      }
+    }
+  } else if (model.startsWith('xai')) {
+    if (!xai) {
+      throw new Error('XAI_API_KEY not configured. Please add your xAI API key to use Grok models.')
+    }
+    
+    const messages: OpenAI.Chat.ChatCompletionMessageParam[] = []
+    
+    if (systemInstruction) {
+      messages.push({ role: 'system', content: systemInstruction })
+    }
+    
+    messages.push({ role: 'user', content: prompt })
+    
+    const modelName = model.includes('vision') ? 'grok-2-vision-1212' : 'grok-2-1212'
+    
+    const stream = await xai.chat.completions.create({
+      model: modelName,
+      messages,
+      temperature,
+      max_tokens: maxTokens,
+      stream: true,
+    })
+    
+    for await (const chunk of stream) {
+      const text = chunk.choices[0]?.delta?.content || ''
       if (text) {
         yield text
       }

@@ -62,6 +62,10 @@ export default function InputSection({ onNewChat }: InputSectionProps) {
         return 'Gemini 2.5 Pro'
       case 'gemini-2.5-flash':
         return 'Gemini 2.5 Flash'
+      case 'grok-2-1212':
+        return 'Grok 2'
+      case 'grok-vision-beta':
+        return 'Grok Vision'
       default:
         return 'Auto (Smart)'
     }
@@ -77,6 +81,10 @@ export default function InputSection({ onNewChat }: InputSectionProps) {
         return <SiGoogle className="w-4 h-4" />
       case 'gemini-2.5-flash':
         return <FiCpu className="w-4 h-4 text-blue-500" />
+      case 'grok-2-1212':
+        return <FiCpu className="w-4 h-4 text-purple-500" />
+      case 'grok-vision-beta':
+        return <FiCpu className="w-4 h-4 text-indigo-500" />
       default:
         return <FiZap className="w-4 h-4" />
     }
@@ -363,7 +371,7 @@ export default function InputSection({ onNewChat }: InputSectionProps) {
                 className="absolute bottom-full mb-2 left-0 w-56 bg-white dark:bg-gray-800 rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden z-50"
               >
                 <div className="p-2">
-                  {(['auto', 'chatgpt-5', 'gemini-2.5-flash', 'gemini-2.5-pro'] as AIModelSelection[]).map((model) => (
+                  {(['auto', 'chatgpt-5', 'gemini-2.5-flash', 'gemini-2.5-pro', 'grok-2-1212', 'grok-vision-beta'] as AIModelSelection[]).map((model) => (
                     <button
                       key={model}
                       type="button"
@@ -390,6 +398,12 @@ export default function InputSection({ onNewChat }: InputSectionProps) {
                         )}
                         {model === 'gemini-2.5-pro' && (
                           <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Google AI Pro</div>
+                        )}
+                        {model === 'grok-2-1212' && (
+                          <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">xAI Grok - 131k context</div>
+                        )}
+                        {model === 'grok-vision-beta' && (
+                          <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">xAI Grok with vision</div>
                         )}
                       </div>
                       {selectedModel === model && (
