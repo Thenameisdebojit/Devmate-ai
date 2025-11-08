@@ -15,6 +15,233 @@ interface Source {
   publishedDate?: string
 }
 
+async function analyzeIntent(query: string, openai: any): Promise<string> {
+  const response = await openai.chat.completions.create({
+    model: 'gpt-4o-mini',
+    messages: [
+      {
+        role: 'system',
+        content: 'You are a query classifier. Classify the user query as one of: academic, code, research, or hybrid. Respond with only one word.',
+      },
+      { role: 'user', content: query },
+    ],
+    temperature: 0.1,
+    max_tokens: 10,
+  })
+  return response.choices[0]?.message?.content?.toLowerCase().trim() || 'research'
+}
+
+async function expandQuery(query: string, openai: any): Promise<string[]> {
+  const response = await openai.chat.completions.create({
+    model: 'gpt-4o-mini',
+    messages: [
+      {
+        role: 'system',
+        content: 'Generate 2-3 related search queries to help find comprehensive information. Return only the queries, one per line, without numbering.',
+      },
+      { role: 'user', content: query },
+    ],
+    temperature: 0.7,
+    max_tokens: 150,
+  })
+  const expanded = response.choices[0]?.message?.content?.trim().split('\n').filter((q: string) => q.trim()) || []
+  return [query, ...expanded.slice(0, 2)]
+}
+
+async function retrieveWebResults(queries: string[], searchDepth: 'basic' | 'advanced' = 'basic'): Promise<any[]> {
+  const allResults: any[] = []
+  
+  if (tvly) {
+    const searchPromises = queries.map(async (q) => {
+      try {
+        const response = await tvly.search(q, {
+          searchDepth,
+          maxResults: 5,
+          includeAnswer: false,
+          includeImages: false,
+        })
+        return response.results || []
+      } catch (error) {
+        console.error(`Tavily search error for query "${q}":`, error)
+        return []
+      }
+    })
+    
+    const results = await Promise.all(searchPromises)
+    allResults.push(...results.flat())
+  }
+  
+  const uniqueResults = Array.from(
+    new Map(allResults.map((r: any) => [r.url, r])).values()
+  )
+  
+  return uniqueResults.slice(0, 10)
+}
+
+async function fallbackKnowledgeBase(query: string, openai: any): Promise<{ answer: string; sources: Source[] }> {
+  const response = await openai.chat.completions.create({
+    model: 'gpt-4o',
+    messages: [
+      {
+        role: 'system',
+        content: `You are a research assistant. When web search is unavailable, provide a comprehensive answer based on your training data. 
+
+CRITICAL TRANSPARENCY REQUIREMENTS:
+1. Start with: "⚠️ **Web Search Unavailable** - This answer is based on AI training data (cutoff: October 2023) and cannot access current web sources."
+2. After each factual statement, add [Source: AI Training Data]
+3. At the end, add a section: "## Limitations\n- Cannot verify against current web sources\n- May not reflect recent developments\n- For latest information, enable Tavily API"
+4. Use markdown formatting with headings and bullet points`,
+      },
+      { role: 'user', content: query },
+    ],
+    temperature: 0.4,
+    max_tokens: 1500,
+  })
+
+  const answer = response.choices[0]?.message?.content || '⚠️ **Web Search Unavailable** - Unable to generate answer without web search access. Please configure TAVILY_API_KEY for academic research functionality.'
+  
+  return {
+    answer,
+    sources: [{
+      title: 'AI Training Data (Oct 2023 Cutoff)',
+      url: 'https://openai.com/research',
+      snippet: '⚠️ Answer generated from AI model training data. No live web sources were consulted. For verified, up-to-date academic research with citations, configure Tavily API.',
+      score: 0,
+    }],
+  }
+}
+
+async function rankAndFilterSources(results: any[], query: string, openai: any): Promise<Source[]> {
+  if (results.length === 0) return []
+
+  const sourcesWithContent = results.map((r, idx) => ({
+    index: idx,
+    title: r.title || 'Untitled',
+    url: r.url || '#',
+    snippet: r.content || r.snippet || '',
+    rawScore: r.score || 0,
+    publishedDate: r.publishedDate || r.published_date,
+  }))
+
+  const rankingPrompt = `Given the query "${query}", rank these sources by credibility and relevance. Prefer academic, educational (.edu), government (.gov), and documentation sites.
+
+Sources:
+${sourcesWithContent.map((s, i) => `${i + 1}. ${s.title} - ${s.url.substring(0, 50)}`).join('\n')}
+
+Return the indices of the top 5 most credible and relevant sources in order, comma-separated (e.g., "3,1,5,2,4").`
+
+  try {
+    const rankingResponse = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: 'You are a source credibility evaluator for academic research.' },
+        { role: 'user', content: rankingPrompt },
+      ],
+      temperature: 0.2,
+      max_tokens: 50,
+    })
+
+    const rankedIndices = rankingResponse.choices[0]?.message?.content
+      ?.trim()
+      .split(',')
+      .map((i: string) => parseInt(i.trim()) - 1)
+      .filter((i: number) => !isNaN(i) && i >= 0 && i < sourcesWithContent.length) || []
+
+    const topSources = rankedIndices.map((idx: number) => sourcesWithContent[idx])
+    const fallbackSources = sourcesWithContent.slice(0, 5)
+    
+    return topSources.length > 0 ? topSources : fallbackSources
+  } catch (error) {
+    console.error('Ranking error, using default order:', error)
+    return sourcesWithContent.slice(0, 5)
+  }
+}
+
+async function verifyCitations(answer: string, sources: Source[]): Promise<boolean> {
+  const sourceUrls = sources.map(s => s.url)
+  const citationRegex = /\[Source:\s*([^\]]+)\]/g
+  const citations = Array.from(answer.matchAll(citationRegex))
+  
+  if (citations.length === 0) {
+    console.warn('Hallucination guard: No citations found in answer')
+    return false
+  }
+  
+  const validCitations = citations.filter(match => {
+    const citedUrl = match[1].trim()
+    return sourceUrls.some(url => url.includes(citedUrl) || citedUrl.includes(url.split('/')[2]))
+  })
+  
+  const citationRatio = validCitations.length / citations.length
+  console.log(`Citation verification: ${validCitations.length}/${citations.length} valid (${(citationRatio * 100).toFixed(1)}%)`)
+  
+  return citationRatio >= 0.8
+}
+
+async function generateAnswerWithCitations(
+  query: string,
+  sources: Source[],
+  model: string,
+  openai: any
+): Promise<string> {
+  if (sources.length === 0) {
+    return 'I could not find sufficient reliable sources to answer this question. Please try rephrasing your query or checking if the topic requires more specific terms.'
+  }
+
+  const sourcesText = sources
+    .map((s, i) => `[${i + 1}] ${s.title}\n${s.snippet}\nURL: ${s.url}`)
+    .join('\n\n')
+
+  const systemPrompt = `You are a professional academic research assistant and summarizer.
+
+CRITICAL RULES - HALLUCINATION GUARD:
+1. ONLY use information explicitly stated in the provided sources
+2. NEVER invent facts, statistics, or claims not in the sources
+3. If sources lack information to answer, state: "The provided sources do not contain sufficient information on [topic]"
+4. Include citations after EVERY factual statement using [Source: URL] format
+5. Synthesize information from multiple sources when they agree
+6. Note any contradictions between sources
+7. Organize with clear sections if the topic is complex
+8. Be concise but comprehensive
+9. If a claim cannot be verified from sources, do not include it
+
+FORMAT: Use markdown with proper headings, bullet points, and inline citations.`
+
+  const userPrompt = `Research Question: ${query}
+
+Retrieved Sources:
+${sourcesText}
+
+Provide a well-researched, citation-backed answer. Remember: Do not hallucinate. Only use facts from the sources above.`
+
+  let attempts = 0
+  const maxAttempts = 2
+
+  while (attempts < maxAttempts) {
+    const completion = await openai.chat.completions.create({
+      model: model === 'gpt-5' ? 'gpt-4o' : model,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
+      ],
+      temperature: 0.3 + (attempts * 0.1),
+      max_tokens: 2000,
+    })
+
+    const answer = completion.choices[0]?.message?.content || 'Unable to generate summary.'
+    
+    const isValid = await verifyCitations(answer, sources)
+    if (isValid || attempts === maxAttempts - 1) {
+      return answer
+    }
+    
+    console.log(`Hallucination guard: Retry attempt ${attempts + 1} due to insufficient citations`)
+    attempts++
+  }
+
+  return 'Unable to generate summary.'
+}
+
 export async function POST(req: NextRequest) {
   try {
     const { query, model = 'gpt-4o', searchDepth = 'basic', maxResults = 5 } = await req.json()
@@ -26,44 +253,9 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    let searchResults: any[] = []
-    let sources: Source[] = []
-
-    if (tvly) {
-      try {
-        const response = await tvly.search(query, {
-          searchDepth: searchDepth as 'basic' | 'advanced',
-          maxResults: maxResults,
-          includeAnswer: true,
-          includeImages: false,
-        })
-
-        searchResults = response.results || []
-        
-        sources = searchResults.slice(0, maxResults).map((result: any) => ({
-          title: result.title || 'Untitled',
-          url: result.url || '#',
-          snippet: result.content || result.snippet || '',
-          score: result.score || 0,
-          publishedDate: result.publishedDate || result.published_date,
-        }))
-
-        if (response.answer) {
-          return NextResponse.json({
-            summary: response.answer,
-            sources,
-            query,
-            model: 'tavily',
-          })
-        }
-      } catch (error: any) {
-        console.error('Tavily search error:', error)
-      }
-    }
-
     if (!process.env.OPENAI_API_KEY) {
       return NextResponse.json(
-        { error: 'Search API not configured. Please add TAVILY_API_KEY or OPENAI_API_KEY to your environment.' },
+        { error: 'OPENAI_API_KEY is required for research functionality' },
         { status: 500 }
       )
     }
@@ -71,44 +263,36 @@ export async function POST(req: NextRequest) {
     const OpenAI = (await import('openai')).default
     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
-    const snippetsText = sources.length > 0
-      ? sources.map((s, i) => `[${i + 1}] ${s.title}\n${s.snippet}\nSource: ${s.url}`).join('\n\n')
-      : 'No web results available. Provide a helpful response based on your knowledge.'
+    const intent = await analyzeIntent(query, openai)
+    console.log(`Query intent: ${intent}`)
 
-    const systemPrompt = `You are a professional academic research assistant. Your task is to synthesize information from web search results into a clear, well-structured answer.
+    const expandedQueries = await expandQuery(query, openai)
+    console.log(`Expanded queries: ${expandedQueries.join(', ')}`)
 
-CRITICAL RULES:
-1. Only use information from the provided search snippets
-2. Include citations using [Source: URL] format after each fact
-3. Do not hallucinate or invent information
-4. If the snippets don't contain relevant information, say so clearly
-5. Organize your response with clear sections if appropriate
-6. Be concise but comprehensive`
+    let webResults = await retrieveWebResults(expandedQueries, searchDepth as 'basic' | 'advanced')
+    console.log(`Retrieved ${webResults.length} web results`)
 
-    const userPrompt = `Question: ${query}
+    let summary: string
+    let rankedSources: Source[]
 
-Search Results:
-${snippetsText}
-
-Please provide a well-researched answer with proper citations.`
-
-    const completion = await openai.chat.completions.create({
-      model: model === 'gpt-5' ? 'gpt-4o' : model,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt },
-      ],
-      temperature: 0.3,
-      max_tokens: 1500,
-    })
-
-    const summary = completion.choices[0]?.message?.content || 'Unable to generate summary.'
+    if (webResults.length === 0) {
+      console.log('No Tavily results, using knowledge base fallback')
+      const fallback = await fallbackKnowledgeBase(query, openai)
+      summary = fallback.answer
+      rankedSources = fallback.sources
+    } else {
+      rankedSources = await rankAndFilterSources(webResults, query, openai)
+      console.log(`Ranked to ${rankedSources.length} top sources`)
+      summary = await generateAnswerWithCitations(query, rankedSources, model, openai)
+    }
 
     return NextResponse.json({
       summary,
-      sources,
+      sources: rankedSources,
       query,
       model,
+      intent,
+      expandedQueries,
     })
   } catch (error: any) {
     console.error('Research API error:', error)
