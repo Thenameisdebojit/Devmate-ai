@@ -3,7 +3,7 @@ import { connectDB } from '@/lib/mongodb'
 import User from '@/models/User'
 import { comparePassword, createToken } from '@/lib/auth'
 
-// 👇 optional but recommended to prevent Vercel "Dynamic server usage" build errors
+// Prevents "Dynamic server usage" errors on Vercel
 export const dynamic = 'force-dynamic'
 
 export async function POST(req: NextRequest) {
@@ -25,15 +25,15 @@ export async function POST(req: NextRequest) {
     const user = await User.findOne({ email }).select('+password')
 
     // Check if user or password field is missing
-    if (!user || !user.password) {
+    if (!user || typeof user.password !== 'string') {
       return NextResponse.json(
         { error: 'Invalid email or password' },
         { status: 401 }
       )
     }
 
-    // ✅ FIX: Explicitly assert user.password as string
-    const isPasswordValid = await comparePassword(password, user.password as string)
+    // ✅ Compare password safely (TypeScript & runtime safe)
+    const isPasswordValid = await comparePassword(password, user.password)
     if (!isPasswordValid) {
       return NextResponse.json(
         { error: 'Invalid email or password' },
