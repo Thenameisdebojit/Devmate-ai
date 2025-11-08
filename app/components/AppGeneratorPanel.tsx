@@ -107,6 +107,36 @@ export default function AppGeneratorPanel() {
     }
   }
 
+  const handleCreateInWorkspace = async () => {
+    if (!generatedProject) return
+
+    try {
+      const loadingToast = toast.loading('Creating project in workspace...')
+      
+      const response = await fetch('/api/create-project', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          projectName: generatedProject.projectName,
+          files: generatedProject.files,
+        }),
+      })
+
+      toast.dismiss(loadingToast)
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Failed to create project')
+      }
+
+      const data = await response.json()
+      toast.success(`Project created at: ${data.projectPath}`)
+      toast.success('Files ready! Check the file explorer on the left.', { duration: 5000 })
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to create project in workspace')
+    }
+  }
+
   const handleDownload = async () => {
     if (!generatedProject) return
 
@@ -238,20 +268,29 @@ export default function AppGeneratorPanel() {
               </p>
             </div>
 
-            <div className="flex gap-3">
+            <div className="space-y-3">
+              <div className="flex gap-3">
+                <button
+                  onClick={handleCreateInWorkspace}
+                  className="flex-1 py-3 px-4 bg-gradient-to-r from-indigo-600 to-purple-600 hover:shadow-lg rounded-lg text-white font-medium flex items-center justify-center gap-2 transition-all hover:scale-105"
+                >
+                  <FiCode />
+                  Create in Workspace
+                </button>
+                <button
+                  onClick={handleDownload}
+                  className="flex-1 py-2 px-4 bg-white/10 hover:bg-white/20 rounded-lg text-white font-medium flex items-center justify-center gap-2 transition-all"
+                >
+                  <FiDownload />
+                  Download ZIP
+                </button>
+              </div>
               <button
                 onClick={() => setShowPreview(!showPreview)}
-                className="flex-1 py-2 px-4 bg-white/10 hover:bg-white/20 rounded-lg text-white font-medium flex items-center justify-center gap-2 transition-all"
+                className="w-full py-2 px-4 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-white font-medium flex items-center justify-center gap-2 transition-all"
               >
                 <FiEye />
                 {showPreview ? 'Hide' : 'Preview'} Files
-              </button>
-              <button
-                onClick={handleDownload}
-                className="flex-1 py-2 px-4 bg-gradient-to-r from-green-500 to-blue-600 hover:shadow-lg rounded-lg text-white font-medium flex items-center justify-center gap-2 transition-all"
-              >
-                <FiDownload />
-                Download ZIP
               </button>
             </div>
 
