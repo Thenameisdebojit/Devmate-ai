@@ -18,15 +18,14 @@ export default function Header({ currentDomain, setCurrentDomain }: HeaderProps)
     toast.success('Conversation cleared')
   }
 
-  const handleExport = () => {
-    exportConversation()
-    toast.success('Conversation exported')
+  const handleShare = () => {
+    toast.success('Share feature coming soon!')
   }
 
   const domains = ['General', 'Python', 'JavaScript', 'TypeScript', 'React', 'Node.js', 'Go', 'Rust']
 
   return (
-    <header className="glass-morphism border-b border-white/10">
+    <header className="glass-morphism">
       <div className="container mx-auto px-4 py-3 md:py-4 flex items-center justify-between">
         <div className="flex items-center gap-2 md:gap-3">
           <div className="w-10 h-10 md:w-12 md:h-12 rounded-xl bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center text-white font-bold text-lg md:text-xl">
@@ -52,12 +51,12 @@ export default function Header({ currentDomain, setCurrentDomain }: HeaderProps)
           </select>
 
           <button
-            onClick={handleExport}
+            onClick={handleShare}
             className="hidden sm:block glass-morphism p-2 rounded-lg hover:bg-white/20 transition-colors"
-            title="Export conversation"
+            title="Share conversation"
           >
             <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
             </svg>
           </button>
 

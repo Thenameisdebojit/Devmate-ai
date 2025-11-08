@@ -18,12 +18,14 @@ const AuthModal = lazy(() => import('./components/AuthModal'))
 const SettingsModal = lazy(() => import('./components/SettingsModal'))
 const OnboardingModal = lazy(() => import('./components/OnboardingModal'))
 const HelpModal = lazy(() => import('./components/HelpModal'))
+const ShareModal = lazy(() => import('./components/ShareModal'))
 
 export default function Home() {
   const [showAuthModal, setShowAuthModal] = useState(false)
   const [showSettingsModal, setShowSettingsModal] = useState(false)
   const [showOnboarding, setShowOnboarding] = useState(false)
   const [showHelpModal, setShowHelpModal] = useState(false)
+  const [showShareModal, setShowShareModal] = useState(false)
   const [currentChatId, setCurrentChatId] = useState<string | null>(null)
   const [isSidebarOpen, setIsSidebarOpen] = useState(true)
   const [saveTimeout, setSaveTimeout] = useState<NodeJS.Timeout | null>(null)
@@ -187,6 +189,15 @@ export default function Home() {
           )}
           {showHelpModal && (
             <HelpModal isOpen={showHelpModal} onClose={() => setShowHelpModal(false)} />
+          )}
+          {showShareModal && (
+            <ShareModal 
+              isOpen={showShareModal} 
+              onClose={() => setShowShareModal(false)}
+              messages={messages}
+              chatId={currentChatId}
+              title={messages.find((m) => m.type === 'user')?.content.substring(0, 50) || 'Shared Conversation'}
+            />
           )}
         </Suspense>
 
