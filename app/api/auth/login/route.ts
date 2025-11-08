@@ -7,6 +7,7 @@ export async function POST(req: NextRequest) {
   try {
     const { email, password } = await req.json()
 
+    // Basic validation
     if (!email || !password) {
       return NextResponse.json(
         { error: 'Please provide email and password' },
@@ -14,16 +15,20 @@ export async function POST(req: NextRequest) {
       )
     }
 
+    // Connect to the database
     await connectDB()
 
+    // Find user by email
     const user = await User.findOne({ email }).select('+password')
-    if (!user) {
+    if (!user || !user.password) {
+      // user not found OR missing password field
       return NextResponse.json(
         { error: 'Invalid email or password' },
         { status: 401 }
       )
     }
 
+    // Compare password safely (TypeScript now knows password is string)
     const isPasswordValid = await comparePassword(password, user.password)
     if (!isPasswordValid) {
       return NextResponse.json(
@@ -32,8 +37,10 @@ export async function POST(req: NextRequest) {
       )
     }
 
+    // Create JWT or session token
     const token = await createToken(String(user._id), user.email)
 
+    // Prepare successful response
     const response = NextResponse.json({
       success: true,
       user: {
@@ -44,6 +51,7 @@ export async function POST(req: NextRequest) {
       },
     })
 
+    // Set auth cookie
     response.cookies.set('auth-token', token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
