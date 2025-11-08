@@ -3,8 +3,10 @@ import mongoose, { Schema, Document, Model } from 'mongoose'
 export interface IUser extends Document {
   name: string
   email: string
-  password: string
+  password?: string
   avatar?: string
+  provider?: string
+  providerId?: string
   createdAt: Date
   updatedAt: Date
 }
@@ -24,11 +26,19 @@ const UserSchema: Schema = new Schema(
     },
     password: {
       type: String,
-      required: [true, 'Please provide a password'],
       minlength: 6,
       select: false,
     },
     avatar: {
+      type: String,
+      default: null,
+    },
+    provider: {
+      type: String,
+      enum: ['credentials', 'google'],
+      default: 'credentials',
+    },
+    providerId: {
       type: String,
       default: null,
     },

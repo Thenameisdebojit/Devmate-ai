@@ -19,6 +19,7 @@ const SettingsModal = lazy(() => import('./components/SettingsModal'))
 const OnboardingModal = lazy(() => import('./components/OnboardingModal'))
 const HelpModal = lazy(() => import('./components/HelpModal'))
 const ShareModal = lazy(() => import('./components/ShareModal'))
+const ResearchPanel = lazy(() => import('./components/ResearchPanel'))
 
 export default function Home() {
   const [showAuthModal, setShowAuthModal] = useState(false)
@@ -211,14 +212,20 @@ export default function Home() {
           </div>
 
           <div className="flex-1 overflow-y-auto">
-            <div className="max-w-6xl mx-auto px-4 py-6">
-              {currentDomain === 'Web Development' && (
-                <div className="mb-6">
-                  <AppGeneratorPanel />
-                </div>
-              )}
-              <ChatWindow />
-            </div>
+            {currentDomain === 'academic' ? (
+              <Suspense fallback={<div className="flex items-center justify-center h-full"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div></div>}>
+                <ResearchPanel />
+              </Suspense>
+            ) : (
+              <div className="max-w-6xl mx-auto px-4 py-6">
+                {currentDomain === 'web-dev' && (
+                  <div className="mb-6">
+                    <AppGeneratorPanel />
+                  </div>
+                )}
+                <ChatWindow />
+              </div>
+            )}
           </div>
 
           <div className="sticky bottom-0 z-30 border-t border-gray-200 dark:border-gray-800 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm">
