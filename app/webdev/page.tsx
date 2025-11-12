@@ -7,13 +7,15 @@ import PlanView from '@/components/webdev/PlanView'
 import GeneratorView from '@/components/webdev/GeneratorView'
 import HistoryPanel from '@/components/webdev/HistoryPanel'
 import LanguageSelector from '@/components/webdev/LanguageSelector'
+import { LanguageProvider } from '@/contexts/LanguageContext'
+import type { Plan, Project } from '@/lib/aiSchemas'
 import { FiCode, FiBookOpen } from 'react-icons/fi'
 
 export default function WebDevPage() {
   const [currentStep, setCurrentStep] = useState<'prompt' | 'plan' | 'generate'>('prompt')
   const [prompt, setPrompt] = useState('')
-  const [plan, setPlan] = useState<any>(null)
-  const [generatedProject, setGeneratedProject] = useState<any>(null)
+  const [plan, setPlan] = useState<Plan | null>(null)
+  const [generatedProject, setGeneratedProject] = useState<Project | null>(null)
   const [isPlanning, setIsPlanning] = useState(false)
   const [isGenerating, setIsGenerating] = useState(false)
 
@@ -75,15 +77,19 @@ export default function WebDevPage() {
             try {
               const parsed = JSON.parse(data)
               if (parsed.type === 'project') {
-                setGeneratedProject(parsed.data)
+                // Validate project structure
+                const { validateProject } = await import('@/lib/aiSchemas')
+                const validatedProject = validateProject(parsed.data)
+                
+                setGeneratedProject(validatedProject)
                 
                 // Save to history
                 const { addWebDevHistoryItem } = await import('@/lib/webdevHistory')
                 addWebDevHistoryItem({
                   prompt,
-                  framework: parsed.data.framework || 'Unknown',
-                  fileCount: parsed.data.files?.length || 0,
-                  modelUsed: parsed.data.modelUsed,
+                  framework: validatedProject.framework || 'Unknown',
+                  fileCount: validatedProject.files?.length || 0,
+                  modelUsed: validatedProject.modelUsed,
                 })
                 
                 // Trigger history update event
@@ -103,6 +109,7 @@ export default function WebDevPage() {
   }
 
   return (
+    <LanguageProvider>
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
       {/* Header */}
       <div className="border-b border-gray-700 bg-gray-900/50 backdrop-blur-sm sticky top-0 z-50">
@@ -175,5 +182,6 @@ export default function WebDevPage() {
         </div>
       </div>
     </div>
+    </LanguageProvider>
   )
 }

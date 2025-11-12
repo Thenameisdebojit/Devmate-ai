@@ -1,10 +1,10 @@
 'use client'
 
 import { FiGlobe } from 'react-icons/fi'
-import { useTranslation } from '@/hooks/useTranslation'
+import { useLanguage } from '@/contexts/LanguageContext'
 
 export default function LanguageSelector() {
-  const { language, changeLanguage } = useTranslation()
+  const { language, changeLanguage } = useLanguage()
 
   return (
     <div className="flex items-center gap-2 px-3 py-2 bg-gray-800 rounded-lg">

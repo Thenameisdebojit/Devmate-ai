@@ -1,9 +1,34 @@
 import { NextRequest } from 'next/server'
 import { callAIModelWithFailover } from '@/lib/aiOrchestrator'
+import { validateProject, validatePlan, type Plan } from '@/lib/aiSchemas'
 
 export async function POST(req: NextRequest) {
   const encoder = new TextEncoder()
-  const { prompt, plan } = await req.json()
+  
+  let prompt: string
+  let plan: Plan
+  
+  try {
+    const body = await req.json()
+    prompt = body.prompt
+    
+    // Validate request
+    if (!prompt || typeof prompt !== 'string' || prompt.trim().length === 0) {
+      throw new Error('Invalid prompt')
+    }
+    
+    if (!body.plan || typeof body.plan !== 'object') {
+      throw new Error('Invalid plan')
+    }
+    
+    // Validate plan structure
+    plan = validatePlan(body.plan)
+  } catch (error: any) {
+    return new Response(
+      JSON.stringify({ error: error.message || 'Invalid request' }),
+      { status: 400, headers: { 'Content-Type': 'application/json' } }
+    )
+  }
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -51,15 +76,18 @@ Also include setup instructions at the end.`
         const files = parseGeneratedFiles(response.text)
         const setup = extractSetupInstructions(response.text)
 
-        const project = {
+        const rawProject = {
           name: extractProjectName(prompt),
           framework: plan.framework || 'Next.js',
           files,
           setup,
-          dependencies: plan.dependencies || [],
+          modelUsed: response.modelUsed,
         }
 
-        send({ type: 'project', data: project })
+        // Validate project structure
+        const validatedProject = validateProject(rawProject)
+
+        send({ type: 'project', data: validatedProject })
         send({ type: 'done' })
 
         controller.close()

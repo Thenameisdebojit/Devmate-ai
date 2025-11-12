@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { callAIModelWithFailover } from '@/lib/aiOrchestrator'
+import { validatePlan } from '@/lib/aiSchemas'
 
 export async function POST(req: NextRequest) {
   try {
@@ -36,27 +37,30 @@ Format your response as JSON with these fields:
       maxTokens: 4096,
     })
 
-    let plan
+    let rawPlan
     try {
       const jsonMatch = response.text.match(/\{[\s\S]*\}/)
       if (jsonMatch) {
-        plan = JSON.parse(jsonMatch[0])
+        rawPlan = JSON.parse(jsonMatch[0])
       } else {
-        plan = {
+        rawPlan = {
           architecture: response.text,
           files: [],
           dependencies: []
         }
       }
     } catch (e) {
-      plan = {
+      rawPlan = {
         architecture: response.text,
         files: [],
         dependencies: []
       }
     }
 
-    return NextResponse.json({ plan, modelUsed: response.modelUsed })
+    // Validate the plan structure
+    const validatedPlan = validatePlan(rawPlan)
+
+    return NextResponse.json({ plan: validatedPlan, modelUsed: response.modelUsed })
   } catch (error: any) {
     console.error('Planning error:', error)
     return NextResponse.json(
