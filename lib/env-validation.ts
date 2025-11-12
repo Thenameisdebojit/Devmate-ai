@@ -41,11 +41,14 @@ The following required environment variables are not set:
 ${missing.map(v => `  • ${v}`).join('\n')}
 
 Please configure these in your Replit Secrets or .env.local file.
-
-Application cannot start without these variables.
 `
-    console.error(errorMessage)
-    throw new Error(`Missing required environment variables: ${missing.join(', ')}`)
+    
+    if (process.env.NODE_ENV === 'production') {
+      console.error(errorMessage + '\nApplication cannot start without these variables.')
+      throw new Error(`Missing required environment variables: ${missing.join(', ')}`)
+    } else {
+      console.warn(errorMessage + '\n⚠️  Running in development mode with missing secrets.\n⚠️  Some features will not work until secrets are configured.\n')
+    }
   }
 
   const warnings: string[] = []
@@ -61,6 +64,4 @@ Application cannot start without these variables.
   }
 }
 
-if (process.env.NODE_ENV !== 'production') {
-  validateEnvironmentVariables()
-}
+validateEnvironmentVariables()
