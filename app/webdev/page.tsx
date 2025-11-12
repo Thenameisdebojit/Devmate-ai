@@ -6,6 +6,7 @@ import PromptBox from '@/components/webdev/PromptBox'
 import PlanView from '@/components/webdev/PlanView'
 import GeneratorView from '@/components/webdev/GeneratorView'
 import HistoryPanel from '@/components/webdev/HistoryPanel'
+import LanguageSelector from '@/components/webdev/LanguageSelector'
 import { FiCode, FiBookOpen } from 'react-icons/fi'
 
 export default function WebDevPage() {
@@ -75,6 +76,18 @@ export default function WebDevPage() {
               const parsed = JSON.parse(data)
               if (parsed.type === 'project') {
                 setGeneratedProject(parsed.data)
+                
+                // Save to history
+                const { addWebDevHistoryItem } = await import('@/lib/webdevHistory')
+                addWebDevHistoryItem({
+                  prompt,
+                  framework: parsed.data.framework || 'Unknown',
+                  fileCount: parsed.data.files?.length || 0,
+                  modelUsed: parsed.data.modelUsed,
+                })
+                
+                // Trigger history update event
+                window.dispatchEvent(new Event('webdev-history-updated'))
               }
             } catch (e) {
               console.error('Parse error:', e)
@@ -104,10 +117,13 @@ export default function WebDevPage() {
                 <p className="text-sm text-gray-400">Build full-stack applications from natural language</p>
               </div>
             </div>
-            <button className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-white transition-all">
-              <FiBookOpen />
-              <span className="text-sm">Documentation</span>
-            </button>
+            <div className="flex items-center gap-3">
+              <LanguageSelector />
+              <button className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-white transition-all">
+                <FiBookOpen />
+                <span className="text-sm">Documentation</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>

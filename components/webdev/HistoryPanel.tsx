@@ -2,21 +2,25 @@
 
 import { useState, useEffect } from 'react'
 import { FiClock, FiCode } from 'react-icons/fi'
-
-interface HistoryItem {
-  id: string
-  title: string
-  timestamp: string
-  framework: string
-}
+import { getWebDevHistory, type WebDevHistoryItem } from '@/lib/webdevHistory'
 
 export default function HistoryPanel() {
-  const [history, setHistory] = useState<HistoryItem[]>([])
+  const [history, setHistory] = useState<WebDevHistoryItem[]>([])
 
   useEffect(() => {
-    const savedHistory = localStorage.getItem('webdev-history')
-    if (savedHistory) {
-      setHistory(JSON.parse(savedHistory))
+    setHistory(getWebDevHistory())
+    
+    // Listen for history updates
+    const handleStorageChange = () => {
+      setHistory(getWebDevHistory())
+    }
+    
+    window.addEventListener('storage', handleStorageChange)
+    window.addEventListener('webdev-history-updated', handleStorageChange)
+    
+    return () => {
+      window.removeEventListener('storage', handleStorageChange)
+      window.removeEventListener('webdev-history-updated', handleStorageChange)
     }
   }, [])
 
@@ -43,10 +47,12 @@ export default function HistoryPanel() {
                 <FiCode className="text-blue-400 mt-1 flex-shrink-0" />
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-medium text-white truncate group-hover:text-blue-400 transition-colors">
-                    {item.title}
+                    {item.prompt.slice(0, 50)}{item.prompt.length > 50 ? '...' : ''}
                   </div>
-                  <div className="text-xs text-gray-500 mt-1">{item.framework}</div>
-                  <div className="text-xs text-gray-600 mt-1">{item.timestamp}</div>
+                  <div className="text-xs text-gray-500 mt-1">{item.framework} · {item.fileCount} files</div>
+                  <div className="text-xs text-gray-600 mt-1">
+                    {new Date(item.timestamp).toLocaleDateString()} at {new Date(item.timestamp).toLocaleTimeString()}
+                  </div>
                 </div>
               </div>
             </button>
