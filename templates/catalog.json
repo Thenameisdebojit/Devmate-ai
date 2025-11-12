@@ -1,0 +1,32 @@
+{
+  "templates": [
+    {
+      "id": "nextjs-starter",
+      "name": "Next.js Starter",
+      "description": "Modern Next.js 14 App Router starter with TypeScript, Tailwind CSS",
+      "stack": ["Next.js", "TypeScript", "Tailwind CSS"],
+      "category": "frontend"
+    },
+    {
+      "id": "express-api",
+      "name": "Express REST API",
+      "description": "Express.js REST API with TypeScript, PostgreSQL, JWT auth",
+      "stack": ["Express", "TypeScript", "PostgreSQL", "JWT"],
+      "category": "backend"
+    },
+    {
+      "id": "fullstack-todo",
+      "name": "Full-Stack Todo App",
+      "description": "Complete todo app with Next.js, Express, PostgreSQL, Prisma",
+      "stack": ["Next.js", "Express", "PostgreSQL", "Prisma"],
+      "category": "fullstack"
+    },
+    {
+      "id": "blog-cms",
+      "name": "Blog CMS",
+      "description": "Blog with markdown support, SQLite, server-side search",
+      "stack": ["Next.js", "SQLite", "Markdown"],
+      "category": "fullstack"
+    }
+  ]
+}

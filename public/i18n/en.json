@@ -1,0 +1,30 @@
+{
+  "webdev": {
+    "title": "Web Development Studio",
+    "subtitle": "Build full-stack applications from natural language",
+    "prompt_placeholder": "Describe your application in detail...",
+    "create_plan": "Create Plan",
+    "generate_project": "Generate Project",
+    "download_project": "Download Project",
+    "view_files": "View Files",
+    "hide_files": "Hide Files",
+    "recent_projects": "Recent Projects",
+    "no_projects": "No projects yet",
+    "architecture": "Architecture",
+    "files_to_create": "Files to Create",
+    "database_schema": "Database Schema",
+    "setup_instructions": "Setup Instructions",
+    "generating": "Generating...",
+    "success": "Project Generated Successfully!",
+    "framework": "Framework",
+    "files_generated": "Files Generated",
+    "status": "Status",
+    "ready": "Ready",
+    "example_prompts": "Example Prompts"
+  },
+  "common": {
+    "back": "Back",
+    "documentation": "Documentation",
+    "loading": "Loading..."
+  }
+}
