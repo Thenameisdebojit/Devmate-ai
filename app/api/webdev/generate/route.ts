@@ -7,10 +7,12 @@ export async function POST(req: NextRequest) {
   
   let prompt: string
   let plan: Plan
+  let selectedModel: string
   
   try {
     const body = await req.json()
     prompt = body.prompt
+    selectedModel = body.selectedModel || 'auto'
     
     // Validate request
     if (!prompt || typeof prompt !== 'string' || prompt.trim().length === 0) {
@@ -69,7 +71,7 @@ Also include setup instructions at the end.`
           systemInstruction,
           temperature: 0.4,
           maxTokens: 8192,
-        })
+        }, selectedModel)
 
         send({ type: 'status', message: 'Processing generated code...' })
 

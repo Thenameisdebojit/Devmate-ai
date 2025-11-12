@@ -64,6 +64,22 @@ export function chooseModel(
 ): AIModel {
   // If user explicitly selected a model (not 'auto'), use it
   if (userPreference && userPreference !== 'auto') {
+    // Handle new provider:model format (from AIModelSelector)
+    const validModels: AIModel[] = [
+      'openai:gpt-5', 
+      'openai:gpt-4o', 
+      'google:gemini-2.5-pro', 
+      'google:gemini-2.5-flash', 
+      'xai:grok-4', 
+      'xai:grok-2-1212', 
+      'xai:grok-vision-beta'
+    ]
+    
+    if (validModels.includes(userPreference as AIModel)) {
+      return userPreference as AIModel
+    }
+    
+    // Handle legacy format for backward compatibility
     if (userPreference === 'chatgpt-5') {
       return 'openai:gpt-5'
     } else if (userPreference === 'gemini-2.5-pro') {

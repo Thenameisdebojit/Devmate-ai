@@ -4,7 +4,7 @@ import { validatePlan } from '@/lib/aiSchemas'
 
 export async function POST(req: NextRequest) {
   try {
-    const { prompt } = await req.json()
+    const { prompt, selectedModel } = await req.json()
 
     if (!prompt) {
       return NextResponse.json({ error: 'Prompt is required' }, { status: 400 })
@@ -35,7 +35,7 @@ Format your response as JSON with these fields:
       systemInstruction,
       temperature: 0.3,
       maxTokens: 4096,
-    })
+    }, selectedModel || 'auto')
 
     let rawPlan
     try {

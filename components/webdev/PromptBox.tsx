@@ -3,9 +3,10 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { FiSend, FiLoader, FiZap } from 'react-icons/fi'
+import AIModelSelector, { AIModelOption } from './AIModelSelector'
 
 interface PromptBoxProps {
-  onSubmit: (prompt: string) => void
+  onSubmit: (prompt: string, selectedModel: AIModelOption) => void
   isLoading: boolean
 }
 
@@ -29,10 +30,11 @@ const examplePrompts = [
 
 export default function PromptBox({ onSubmit, isLoading }: PromptBoxProps) {
   const [prompt, setPrompt] = useState('')
+  const [selectedModel, setSelectedModel] = useState<AIModelOption>('auto')
 
   const handleSubmit = () => {
     if (prompt.trim() && !isLoading) {
-      onSubmit(prompt)
+      onSubmit(prompt, selectedModel)
     }
   }
 
@@ -73,8 +75,14 @@ export default function PromptBox({ onSubmit, isLoading }: PromptBoxProps) {
         </div>
       </div>
 
+      {/* AI Model Selector */}
+      <div>
+        <h3 className="text-sm font-medium text-gray-400 dark:text-gray-400 mb-3">Select AI Model</h3>
+        <AIModelSelector selectedModel={selectedModel} onModelChange={setSelectedModel} />
+      </div>
+
       {/* Prompt Input */}
-      <div className="bg-gray-800/50 border border-gray-700 rounded-2xl p-6">
+      <div className="bg-gray-800/50 dark:bg-gray-800/50 border border-gray-700 dark:border-gray-700 rounded-2xl p-6">
         <textarea
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
@@ -84,12 +92,12 @@ export default function PromptBox({ onSubmit, isLoading }: PromptBoxProps) {
             }
           }}
           placeholder="Describe your application in detail... (e.g., 'Create a real-time chat app with Next.js, Socket.io, MongoDB, user authentication, and dark mode')"
-          className="w-full h-40 bg-transparent text-white placeholder-gray-500 border-none focus:outline-none resize-none"
+          className="w-full h-40 bg-transparent text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 border-none focus:outline-none resize-none"
           disabled={isLoading}
         />
         <div className="flex items-center justify-between mt-4">
-          <p className="text-xs text-gray-500">
-            Press <kbd className="px-2 py-1 bg-gray-700 rounded">Ctrl</kbd> + <kbd className="px-2 py-1 bg-gray-700 rounded">Enter</kbd> to submit
+          <p className="text-xs text-gray-400 dark:text-gray-500">
+            Press <kbd className="px-2 py-1 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded">Ctrl</kbd> + <kbd className="px-2 py-1 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded">Enter</kbd> to submit
           </p>
           <motion.button
             onClick={handleSubmit}

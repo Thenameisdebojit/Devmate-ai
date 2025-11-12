@@ -14,13 +14,15 @@ import { FiCode, FiBookOpen } from 'react-icons/fi'
 export default function WebDevPage() {
   const [currentStep, setCurrentStep] = useState<'prompt' | 'plan' | 'generate'>('prompt')
   const [prompt, setPrompt] = useState('')
+  const [selectedModel, setSelectedModel] = useState<string>('auto')
   const [plan, setPlan] = useState<Plan | null>(null)
   const [generatedProject, setGeneratedProject] = useState<Project | null>(null)
   const [isPlanning, setIsPlanning] = useState(false)
   const [isGenerating, setIsGenerating] = useState(false)
 
-  const handlePromptSubmit = async (userPrompt: string) => {
+  const handlePromptSubmit = async (userPrompt: string, aiModel: string) => {
     setPrompt(userPrompt)
+    setSelectedModel(aiModel)
     setIsPlanning(true)
     setCurrentStep('plan')
 
@@ -28,7 +30,7 @@ export default function WebDevPage() {
       const response = await fetch('/api/webdev/plan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: userPrompt }),
+        body: JSON.stringify({ prompt: userPrompt, selectedModel: aiModel }),
       })
 
       if (!response.ok) throw new Error('Failed to create plan')
@@ -52,7 +54,7 @@ export default function WebDevPage() {
       const response = await fetch('/api/webdev/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt, plan }),
+        body: JSON.stringify({ prompt, plan, selectedModel }),
       })
 
       if (!response.ok) throw new Error('Failed to generate project')
