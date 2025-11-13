@@ -38,14 +38,14 @@ export default function MonacoCodeOutput() {
     }
   }, [messages])
 
-  // Update theme based on body class
+  // Update theme based on body class - using high contrast themes for better visibility
   useEffect(() => {
     const isDark = document.body.classList.contains('dark')
-    setTheme(isDark ? 'vs-dark' : 'light')
+    setTheme(isDark ? 'vs-dark' : 'vs')
 
     const observer = new MutationObserver(() => {
       const isDark = document.body.classList.contains('dark')
-      setTheme(isDark ? 'vs-dark' : 'light')
+      setTheme(isDark ? 'vs-dark' : 'vs')
     })
 
     observer.observe(document.body, { attributes: true, attributeFilter: ['class'] })

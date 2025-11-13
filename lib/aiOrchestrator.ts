@@ -14,17 +14,13 @@ if (!process.env.OPENAI_API_KEY) {
   throw new Error('OPENAI_API_KEY environment variable is required')
 }
 
-if (!process.env.GEMINI_API_KEY) {
-  throw new Error('GEMINI_API_KEY environment variable is required')
-}
-
 const openai = new OpenAI({ 
   apiKey: process.env.OPENAI_API_KEY
 })
 
-const gemini = new GoogleGenAI({ 
+const gemini = process.env.GEMINI_API_KEY ? new GoogleGenAI({ 
   apiKey: process.env.GEMINI_API_KEY
-})
+}) : null
 
 // DON'T DELETE THIS COMMENT - from blueprint:javascript_xai
 // xAI client is optional - only initialized if XAI_API_KEY is available
@@ -154,6 +150,10 @@ export async function callAIModel(
     }
     
     if (model.startsWith('google')) {
+      if (!gemini) {
+        throw new Error('GEMINI_API_KEY not configured. Please add your Gemini API key to use Gemini models.')
+      }
+      
       const modelName = model.includes('flash') ? 'gemini-2.5-flash' : 'gemini-2.5-pro'
       
       const requestParams: any = {
@@ -330,6 +330,10 @@ export async function* streamAIModel(
       }
     }
   } else if (model.startsWith('google')) {
+    if (!gemini) {
+      throw new Error('GEMINI_API_KEY not configured. Please add your Gemini API key to use Gemini models.')
+    }
+    
     const modelName = model.includes('flash') ? 'gemini-2.5-flash' : 'gemini-2.5-pro'
     
     const requestParams: any = {
