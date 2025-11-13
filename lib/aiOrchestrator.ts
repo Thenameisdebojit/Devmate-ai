@@ -10,13 +10,9 @@ import { GoogleGenAI } from '@google/genai'
 // DON'T DELETE THIS COMMENT - from blueprint:javascript_xai
 // Grok models available: grok-4 (latest, most intelligent), grok-2-1212 (text-only, 131k context), grok-2-vision-1212 (vision support)
 
-if (!process.env.OPENAI_API_KEY) {
-  throw new Error('OPENAI_API_KEY environment variable is required')
-}
-
-const openai = new OpenAI({ 
+const openai = process.env.OPENAI_API_KEY ? new OpenAI({ 
   apiKey: process.env.OPENAI_API_KEY
-})
+}) : null
 
 const gemini = process.env.GEMINI_API_KEY ? new GoogleGenAI({ 
   apiKey: process.env.GEMINI_API_KEY
@@ -129,6 +125,10 @@ export async function callAIModel(
   
   try {
     if (model.startsWith('openai')) {
+      if (!openai) {
+        throw new Error('OPENAI_API_KEY not configured. Please add your OpenAI API key.')
+      }
+      
       const messages: OpenAI.Chat.ChatCompletionMessageParam[] = []
       
       if (systemInstruction) {
@@ -305,6 +305,10 @@ export async function* streamAIModel(
   const { prompt, systemInstruction, temperature = 0.3, maxTokens = 4096 } = request
   
   if (model.startsWith('openai')) {
+    if (!openai) {
+      throw new Error('OPENAI_API_KEY not configured. Please add your OpenAI API key.')
+    }
+    
     const messages: OpenAI.Chat.ChatCompletionMessageParam[] = []
     
     if (systemInstruction) {

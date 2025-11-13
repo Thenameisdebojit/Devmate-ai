@@ -253,37 +253,104 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    if (!process.env.OPENAI_API_KEY) {
+    let openai = null
+    
+    if (process.env.OPENAI_API_KEY) {
+      const OpenAI = (await import('openai')).default
+      openai = new OpenAI({ 
+        apiKey: process.env.OPENAI_API_KEY,
+        timeout: 60000,
+        maxRetries: 2,
+      })
+    } else if (!tvly) {
       return NextResponse.json(
-        { error: 'OPENAI_API_KEY is required for research functionality' },
+        { error: 'Research functionality requires either OPENAI_API_KEY or TAVILY_API_KEY. Please configure at least one.' },
         { status: 500 }
       )
     }
 
-    const OpenAI = (await import('openai')).default
-    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+    let intent = 'research'
+    let expandedQueries = [query]
+    
+    if (openai) {
+      try {
+        intent = await analyzeIntent(query, openai)
+        console.log(`Query intent: ${intent}`)
+      } catch (error) {
+        console.warn('Intent analysis failed, using default:', error)
+      }
 
-    const intent = await analyzeIntent(query, openai)
-    console.log(`Query intent: ${intent}`)
+      try {
+        expandedQueries = await expandQuery(query, openai)
+        console.log(`Expanded queries: ${expandedQueries.join(', ')}`)
+      } catch (error) {
+        console.warn('Query expansion failed, using original query:', error)
+      }
+    }
 
-    const expandedQueries = await expandQuery(query, openai)
-    console.log(`Expanded queries: ${expandedQueries.join(', ')}`)
-
-    let webResults = await retrieveWebResults(expandedQueries, searchDepth as 'basic' | 'advanced')
-    console.log(`Retrieved ${webResults.length} web results`)
+    let webResults: any[] = []
+    
+    try {
+      webResults = await retrieveWebResults(expandedQueries, searchDepth as 'basic' | 'advanced')
+      console.log(`Retrieved ${webResults.length} web results`)
+    } catch (error) {
+      console.warn('Web search failed, will use fallback:', error)
+    }
 
     let summary: string
     let rankedSources: Source[]
 
     if (webResults.length === 0) {
-      console.log('No Tavily results, using knowledge base fallback')
-      const fallback = await fallbackKnowledgeBase(query, openai)
-      summary = fallback.answer
-      rankedSources = fallback.sources
+      console.log('No Tavily results available')
+      if (openai) {
+        try {
+          const fallback = await fallbackKnowledgeBase(query, openai)
+          summary = fallback.answer
+          rankedSources = fallback.sources
+        } catch (error) {
+          console.error('Fallback also failed:', error)
+          return NextResponse.json(
+            { 
+              error: 'Unable to process research query. Please try again later or rephrase your question.',
+              details: error instanceof Error ? error.message : 'Unknown error'
+            },
+            { status: 500 }
+          )
+        }
+      } else {
+        return NextResponse.json(
+          { 
+            error: 'No web search results available and OpenAI fallback not configured. Please configure OPENAI_API_KEY or ensure TAVILY_API_KEY is working.',
+          },
+          { status: 500 }
+        )
+      }
     } else {
-      rankedSources = await rankAndFilterSources(webResults, query, openai)
-      console.log(`Ranked to ${rankedSources.length} top sources`)
-      summary = await generateAnswerWithCitations(query, rankedSources, model, openai)
+      rankedSources = webResults.slice(0, 5).map((r: any) => ({
+        title: r.title || 'Untitled',
+        url: r.url || '#',
+        snippet: r.content || r.snippet || '',
+        score: r.score || 0,
+      }))
+      
+      if (openai) {
+        try {
+          const betterRankedSources = await rankAndFilterSources(webResults, query, openai)
+          rankedSources = betterRankedSources
+          console.log(`Ranked to ${rankedSources.length} top sources`)
+        } catch (error) {
+          console.warn('Ranking failed, using original order:', error)
+        }
+        
+        try {
+          summary = await generateAnswerWithCitations(query, rankedSources, model, openai)
+        } catch (error) {
+          console.warn('AI summary failed, using basic summary:', error)
+          summary = `## Research Results for: ${query}\n\n${rankedSources.map((s, i) => `### ${i + 1}. ${s.title}\n\n${s.snippet}\n\n[Read more: ${s.url}]`).join('\n\n')}\n\n---\n\n*Based on ${rankedSources.length} web sources from Tavily search.*`
+        }
+      } else {
+        summary = `## Research Results for: ${query}\n\n${rankedSources.map((s, i) => `### ${i + 1}. ${s.title}\n\n${s.snippet}\n\n[Read more: ${s.url}]`).join('\n\n')}\n\n---\n\n*Based on ${rankedSources.length} web sources from Tavily search. OpenAI summarization unavailable.*`
+      }
     }
 
     return NextResponse.json({
@@ -297,7 +364,10 @@ export async function POST(req: NextRequest) {
   } catch (error: any) {
     console.error('Research API error:', error)
     return NextResponse.json(
-      { error: error.message || 'Failed to process research query' },
+      { 
+        error: error.message || 'Failed to process research query',
+        details: 'An unexpected error occurred. Please try again or contact support if the issue persists.'
+      },
       { status: 500 }
     )
   }

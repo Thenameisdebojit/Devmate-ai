@@ -79,9 +79,16 @@ export async function POST(req: NextRequest) {
           controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`))
         }
 
-        send({ type: 'status', step: 1, total: 5, message: 'Initializing industrial-grade code generator...' })
+        const user = await User.findById(currentUser.userId)
+        if (!user) {
+          send({ type: 'error', message: 'User not found' })
+          controller.close()
+          return
+        }
 
-        const isPremium = currentUser && ['pro', 'pro_plus'].includes((await User.findById(currentUser.userId))?.subscription?.plan)
+        const isPremium = ['pro', 'pro_plus'].includes(user.subscription?.plan || 'free')
+
+        send({ type: 'status', step: 1, total: 5, message: 'Initializing industrial-grade code generator...' })
 
         const systemInstruction = `You are an EXPERT full-stack developer with 15+ years of experience in building production-grade applications.
 
@@ -109,14 +116,21 @@ ${isPremium ? 'Also include:\n- Setup instructions\n- Testing commands\n- Deploy
 
         send({ type: 'status', step: 2, total: 5, message: 'Generating industrial-grade code with AI...' })
 
-        const response = await callAIModelWithFailover({
-          prompt: `${prompt}\n\nPremium Features: ${isPremium ? 'ENABLED' : 'DISABLED'}`,
-          domain: 'web-dev',
-          action: 'generate',
-          systemInstruction,
-          temperature: 0.3,
-          maxTokens: 12000,
-        })
+        let response
+        try {
+          response = await callAIModelWithFailover({
+            prompt: `${prompt}\n\nPremium Features: ${isPremium ? 'ENABLED' : 'DISABLED'}`,
+            domain: 'web-dev',
+            action: 'generate',
+            systemInstruction,
+            temperature: 0.3,
+            maxTokens: 12000,
+          })
+        } catch (aiError: any) {
+          send({ type: 'error', message: aiError.message || 'AI generation failed. Please try again.' })
+          controller.close()
+          return
+        }
 
         send({ type: 'status', step: 3, total: 5, message: 'Processing and validating generated code...' })
 
@@ -143,12 +157,16 @@ ${isPremium ? 'Also include:\n- Setup instructions\n- Testing commands\n- Deploy
 
         const validatedProject = validateProject(rawProject)
 
-        if (currentUser) {
-          const user = await User.findById(currentUser.userId)
-          if (user && user.subscription?.plan !== 'pro_plus') {
-            user.usageQuota.usedGenerations += 1
-            await user.save()
+        if (user.subscription?.plan !== 'pro_plus') {
+          if (!user.usageQuota) {
+            user.usageQuota = {
+              monthlyGenerations: 10,
+              usedGenerations: 0,
+              resetDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+            }
           }
+          user.usageQuota.usedGenerations = (user.usageQuota.usedGenerations || 0) + 1
+          await user.save()
         }
 
         send({ type: 'project', data: validatedProject })

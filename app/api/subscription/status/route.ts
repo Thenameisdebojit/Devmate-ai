@@ -36,13 +36,16 @@ export async function GET() {
     }
 
     if (new Date() > usageQuota.resetDate) {
+      const planLimit = subscription.plan === 'pro_plus' ? 999999 : subscription.plan === 'pro' ? 100 : 10
       usageQuota.usedGenerations = 0
+      usageQuota.monthlyGenerations = planLimit
       usageQuota.resetDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
-      await User.findByIdAndUpdate(currentUser.userId, { usageQuota })
+      user.usageQuota = usageQuota
+      await user.save()
     }
 
     const remainingGenerations = subscription.plan === 'pro_plus' 
-      ? -1 
+      ? 999999 
       : usageQuota.monthlyGenerations - usageQuota.usedGenerations
 
     return NextResponse.json({

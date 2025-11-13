@@ -33,25 +33,22 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    const monthlyGenerations = plan === 'pro_plus' ? -1 : plan === 'pro' ? 100 : 10
+    const monthlyGenerations = plan === 'pro_plus' ? 999999 : plan === 'pro' ? 100 : 10
 
-    const updatedUser = await User.findByIdAndUpdate(
-      currentUser.userId,
-      {
-        subscription: {
-          plan,
-          status: 'active',
-          startDate: new Date(),
-          endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-        },
-        usageQuota: {
-          monthlyGenerations,
-          usedGenerations: 0,
-          resetDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-        },
-      },
-      { new: true }
-    )
+    user.subscription = {
+      plan,
+      status: 'active',
+      startDate: new Date(),
+      endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+    }
+    
+    user.usageQuota = {
+      monthlyGenerations,
+      usedGenerations: 0,
+      resetDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+    }
+
+    const updatedUser = await user.save()
 
     return NextResponse.json({
       success: true,
