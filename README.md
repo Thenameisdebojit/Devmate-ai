@@ -2,28 +2,6 @@
 
 A modern, full-stack AI coding assistant powered by **OpenAI GPT-5** and **Google Gemini 2.5 Pro**, built with Next.js 14. Features intelligent model routing and full application generation capabilities.
 
-## ⚠️ IMPORTANT: First Time Setup
-
-**Before running the app, you MUST configure environment variables:**
-
-1. **Copy `.env.example` to `.env.local`:**
-   ```bash
-   cp .env.example .env.local
-   ```
-
-2. **Fill in your API keys in `.env.local`:**
-   - `OPENAI_API_KEY` - Get from https://platform.openai.com/api-keys
-   - `GEMINI_API_KEY` - Get from https://ai.google.dev/gemini-api/docs/api-key
-   - `MONGODB_URI` - Get from https://www.mongodb.com/cloud/atlas
-   - `JWT_SECRET` - Any random secure string (32+ characters)
-   - `USE_AI_ORCHESTRATOR` - Set to `true` to enable hybrid AI routing (recommended)
-
-3. **Run the quick setup checker:**
-   ```bash
-   node check-env.js
-   ```
-
----
 
 ## 📋 Changelog - v2.1 (Enhanced UI/UX)
 
