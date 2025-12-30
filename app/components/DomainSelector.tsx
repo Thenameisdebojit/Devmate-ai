@@ -6,6 +6,7 @@ import { FiChevronDown } from 'react-icons/fi'
 
 const domains = [
   { id: 'general', name: 'General', icon: '🧠', description: 'General purpose assistance' },
+  { id: 'app-generator', name: 'App Generator', icon: '⚡', description: 'Generate complete applications from natural language' },
   { id: 'web-dev', name: 'Web Development', icon: '💻', description: 'Frontend, backend, and full-stack development' },
   { id: 'ml-ai', name: 'Machine Learning / AI', icon: '🤖', description: 'ML models, AI algorithms, and neural networks' },
   { id: 'data-science', name: 'Data Science', icon: '📊', description: 'Data analysis, visualization, and statistics' },

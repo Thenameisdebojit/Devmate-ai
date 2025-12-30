@@ -46,7 +46,7 @@ export default function AppGeneratorPanel() {
     setShowPreview(false)
 
     try {
-      const response = await fetch('/api/codegen', {
+      const response = await fetch('/api/generate-app', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt, stream: true }),

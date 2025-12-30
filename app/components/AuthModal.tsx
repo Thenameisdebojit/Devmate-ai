@@ -149,8 +149,17 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
             <button
               type="button"
               onClick={async () => {
-                const { signIn } = await import('next-auth/react')
-                signIn('google', { callbackUrl: '/' })
+                try {
+                  const { signIn } = await import('next-auth/react')
+                  // Use redirect: true for proper OAuth flow
+                  await signIn('google', { 
+                    callbackUrl: window.location.origin,
+                    redirect: true
+                  })
+                } catch (error: any) {
+                  console.error('Google sign-in error:', error)
+                  toast.error('Google sign-in failed. Please check your Google OAuth configuration.')
+                }
               }}
               className="mt-4 w-full flex items-center justify-center gap-3 py-3 px-4 border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-all"
             >

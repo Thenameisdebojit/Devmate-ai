@@ -216,13 +216,12 @@ export default function Home() {
               <Suspense fallback={<div className="flex items-center justify-center h-full"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div></div>}>
                 <ResearchPanel />
               </Suspense>
+            ) : currentDomain === 'app-generator' ? (
+              <div className="max-w-6xl mx-auto px-4 py-6">
+                <AppGeneratorPanel />
+              </div>
             ) : (
               <div className="max-w-6xl mx-auto px-4 py-6">
-                {currentDomain === 'web-dev' && (
-                  <div className="mb-6">
-                    <AppGeneratorPanel />
-                  </div>
-                )}
                 <ChatWindow />
               </div>
             )}
