@@ -1,0 +1,50 @@
+{
+  "project_id": "proj-6158322b",
+  "step_name": "deployment_config",
+  "timestamp": "2025-12-04T12:49:04.179627",
+  "state": {
+    "docker_config": {
+      "frontend": {
+        "filename": "frontend/Dockerfile",
+        "content": "# Stage 1: Build the React application\nFROM node:20-alpine AS build\n\nWORKDIR /app\n\n# Copy package.json and package-lock.json (or yarn.lock)\nCOPY package*.json ./\n\n# Install dependencies\nRUN npm install\n\n# Copy the rest of the application source code\nCOPY . .\n\n# Build the application for production\n# The VITE_API_BASE_URL is a build-time argument to configure the backend URL\nARG VITE_API_BASE_URL=/api\nENV VITE_API_BASE_URL=${VITE_API_BASE_URL}\nRUN npm run build\n\n# Stage 2: Serve the application with Nginx\nFROM nginx:1.25-alpine\n\n# Copy the custom Nginx configuration\nCOPY nginx.conf /etc/nginx/conf.d/default.conf\n\n# Copy the built static files from the 'build' stage\nCOPY --from=build /app/dist /usr/share/nginx/html\n\n# Expose port 80\nEXPOSE 80\n\n# Start Nginx when the container launches\nCMD [\"nginx\", \"-g\", \"daemon off;\"]"
+      },
+      "frontend_nginx_config": {
+        "filename": "frontend/nginx.conf",
+        "content": "server {\n  listen 80;\n  server_name localhost;\n\n  root /usr/share/nginx/html;\n  index index.html;\n\n  location / {\n    # Try to serve the request as a file, then as a directory, \n    # then fall back to index.html for SPA routing\n    try_files $uri $uri/ /index.html;\n  }\n\n  # Optional: Add cache control headers for static assets\n  location ~* \\.(?:css|js|jpg|jpeg|gif|png|ico|svg)$ {\n    expires 1y;\n    add_header Cache-Control \"public\";\n  }\n}"
+      },
+      "backend": {
+        "filename": "backend/Dockerfile",
+        "content": "# Use an official Node.js runtime as a parent image\nFROM node:20-alpine\n\n# Set the working directory in the container\nWORKDIR /app\n\n# Copy package.json and package-lock.json to leverage Docker cache\nCOPY package*.json ./\n\n# Install app dependencies in production mode\nRUN npm install --production\n\n# Bundle app source\nCOPY ./src ./\n\n# Your app binds to port 8080, so you need to expose it\nEXPOSE 8080\n\n# Define the command to run your app\nCMD [ \"node\", \"server.js\" ]"
+      }
+    },
+    "k8s_manifests": {
+      "backend_deployment": {
+        "filename": "k8s/backend-deployment.yaml",
+        "content": "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: backend-deployment\n  labels:\n    app: backend\nspec:\n  replicas: 2\n  selector:\n    matchLabels:\n      app: backend\n  template:\n    metadata:\n      labels:\n        app: backend\n    spec:\n      containers:\n      - name: backend\n        image: YOUR_DOCKER_USERNAME/untitled-project-backend:latest\n        ports:\n        - containerPort: 8080\n        env:\n        - name: PORT\n          value: \"8080\"\n        # It's recommended to manage secrets using Kubernetes Secrets\n        # - name: DATABASE_URL\n        #   valueFrom:\n        #     secretKeyRef:\n        #       name: backend-secrets\n        #       key: database-url"
+      },
+      "backend_service": {
+        "filename": "k8s/backend-service.yaml",
+        "content": "apiVersion: v1\nkind: Service\nmetadata:\n  name: backend-service\nspec:\n  selector:\n    app: backend\n  ports:\n    - protocol: TCP\n      port: 80\n      targetPort: 8080\n  type: ClusterIP"
+      },
+      "frontend_deployment": {
+        "filename": "k8s/frontend-deployment.yaml",
+        "content": "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: frontend-deployment\n  labels:\n    app: frontend\nspec:\n  replicas: 2\n  selector:\n    matchLabels:\n      app: frontend\n  template:\n    metadata:\n      labels:\n        app: frontend\n    spec:\n      containers:\n      - name: frontend\n        image: YOUR_DOCKER_USERNAME/untitled-project-frontend:latest\n        ports:\n        - containerPort: 80"
+      },
+      "frontend_service": {
+        "filename": "k8s/frontend-service.yaml",
+        "content": "apiVersion: v1\nkind: Service\nmetadata:\n  name: frontend-service\nspec:\n  selector:\n    app: frontend\n  ports:\n    - protocol: TCP\n      port: 80\n      targetPort: 80\n  type: ClusterIP"
+      },
+      "ingress": {
+        "filename": "k8s/ingress.yaml",
+        "content": "apiVersion: networking.k8s.io/v1\nkind: Ingress\nmetadata:\n  name: app-ingress\n  annotations:\n    # Use this annotation if you are using the NGINX Ingress Controller\n    nginx.ingress.kubernetes.io/rewrite-target: /$2\n    # For GKE, you might use: kubernetes.io/ingress.class: \"gce\"\n    # For AKS, you might use: kubernetes.io/ingress.class: \"addon-http-application-gateway\"\nspec:\n  rules:\n  - host: your-domain.com\n    http:\n      paths:\n      - path: /api(/|$)(.*)\n        pathType: Prefix\n        backend:\n          service:\n            name: backend-service\n            port:\n              number: 80\n      - path: /()(.*)\n        pathType: Prefix\n        backend:\n          service:\n            name: frontend-service\n            port:\n              number: 80"
+      }
+    },
+    "logs": [
+      {
+        "phase": "deployment_config",
+        "message": "Generated Docker and K8s configurations",
+        "timestamp": "2025-12-04T12:45:47.208228"
+      }
+    ]
+  }
+}

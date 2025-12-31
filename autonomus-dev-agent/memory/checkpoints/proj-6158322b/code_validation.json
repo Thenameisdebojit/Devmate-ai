@@ -1,0 +1,27 @@
+{
+  "project_id": "proj-6158322b",
+  "step_name": "code_validation",
+  "timestamp": "2025-12-04T12:48:18.749063",
+  "state": {
+    "validation_report": {
+      "status": "error",
+      "issues": [
+        {
+          "description": "404 models/gemini-2.0-flash-thinking-exp is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.",
+          "severity": "high",
+          "type": "validation_error"
+        }
+      ],
+      "summary": "Validation failed: 404 models/gemini-2.0-flash-thinking-exp is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.",
+      "overall_score": 0,
+      "model_used": "error"
+    },
+    "logs": [
+      {
+        "phase": "code_validation",
+        "message": "Validation complete using error: error - Score 0/100 - 1 critical/high issues found",
+        "timestamp": "2025-12-04T12:45:47.208228"
+      }
+    ]
+  }
+}

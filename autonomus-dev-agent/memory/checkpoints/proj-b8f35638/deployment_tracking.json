@@ -1,0 +1,17 @@
+{
+  "project_id": "proj-b8f35638",
+  "step_name": "deployment_tracking",
+  "timestamp": "2025-12-31T01:40:40.924299",
+  "state": {
+    "deployment_status": "instructions_generated",
+    "deployment_url": null,
+    "deployment_instructions": "# Deployment Instructions for app\n\n## Frontend Deployment (react)\n\n### Vercel (Recommended)\nInstall Vercel CLI\nnpm i -g vercel\n\nDeploy\ncd frontend\nvercel --prod\n\n### Netlify\nInstall Netlify CLI\nnpm i -g netlify-cli\n\nBuild\nnpm run build\n\nDeploy\nnetlify deploy --prod --dir=build\n\n## Backend Deployment (nodejs-express)\n\n### Railway\nInstall Railway CLI\nnpm i -g @railway/cli\n\nDeploy\ncd backend\nrailway up\n\n### Heroku\nInstall Heroku CLI\nhttps://devcenter.heroku.com/articles/heroku-cli\nDeploy\ncd backend\nheroku create app-api\ngit push heroku main\n\n### AWS (Docker)\nBuild Docker image\ndocker build -t app-backend ./backend\n\nPush to ECR and deploy to ECS/Fargate\naws ecr create-repository --repository-name app\ndocker tag app-backend:latest <ecr-url>\ndocker push <ecr-url>\n\n## Environment Variables\n\nCreate `.env` files in both frontend and backend:\n\n**Frontend (.env):**\nREACT_APP_API_URL=https://your-backend-url.com\n\n\n**Backend (.env):**\nPORT=5000\nDATABASE_URL=mongodb+srv://...\nJWT_SECRET=your-secret-key\n\n\n## Database Setup\n\nSet up your production database and update the connection string in `.env`.\n\n## Post-Deployment\n\n1. Test all endpoints\n2. Set up monitoring (Sentry, LogRocket)\n3. Configure custom domain\n4. Enable HTTPS\n5. Set up CI/CD (GitHub Actions)\n",
+    "logs": [
+      {
+        "phase": "deployment",
+        "message": "Deployment instructions generated",
+        "timestamp": "2025-12-31T01:40:04.059086"
+      }
+    ]
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "project_id": "proj-6158322b",
+  "step_name": "backend_generation",
+  "timestamp": "2025-12-04T12:47:14.884466",
+  "state": {
+    "generated_code": {
+      "backend/package.json": "{\n  \"name\": \"untitled-project\",\n  \"version\": \"1.0.0\",\n  \"description\": \"A simple Node.js Express backend.\",\n  \"main\": \"src/server.js\",\n  \"scripts\": {\n    \"start\": \"node src/server.js\",\n    \"dev\": \"nodemon src/server.js\"\n  },\n  \"dependencies\": {\n    \"cors\": \"^2.8.5\",\n    \"dotenv\": \"^16.0.3\",\n    \"express\": \"^4.18.2\",\n    \"jsonwebtoken\": \"^9.0.0\",\n    \"mongoose\": \"^7.0.3\"\n  },\n  \"devDependencies\": {\n    \"nodemon\": \"^2.0.22\"\n  }\n}\n",
+      "backend/.env.example": "PORT=5000\nMONGODB_URI=mongodb://localhost:27017/untitled_project\nJWT_SECRET=your_super_secret_key\n",
+      "backend/src/server.js": "require('dotenv').config();\nconst express = require('express');\nconst mongoose = require('mongoose');\nconst cors = require('cors');\nconst apiRoutes = require('./routes/api');\n\nconst app = express();\nconst PORT = process.env.PORT || 5000;\n\n// Middleware\napp.use(cors());\napp.use(express.json());\n\n// Database Connection\nmongoose.connect(process.env.MONGODB_URI)\n  .then(() => console.log('MongoDB connected successfully.'))\n  .catch(err => console.error('MongoDB connection error:', err));\n\n// Routes\napp.get('/', (req, res) => {\n  res.send('API is running...');\n});\n\napp.use('/api', apiRoutes);\n\n// Start Server\napp.listen(PORT, () => {\n  console.log(`Server is running on http://localhost:${PORT}`);\n});\n",
+      "backend/src/routes/api.js": "const express = require('express');\nconst jwt = require('jsonwebtoken');\nconst Model = require('../models/Model');\nconst authMiddleware = require('../middleware/auth');\n\nconst router = express.Router();\n\n// Dummy user for demonstration\nconst dummyUser = {\n  id: 1,\n  username: 'testuser',\n  password: 'password123'\n};\n\n// @route   POST /api/login\n// @desc    Authenticate user & get token (dummy)\n// @access  Public\nrouter.post('/login', (req, res) => {\n  const { username, password } = req.body;\n\n  // In a real app, you'd validate the user against a database\n  if (username === dummyUser.username && password === dummyUser.password) {\n    const payload = { user: { id: dummyUser.id } };\n    const token = jwt.sign(\n      payload,\n      process.env.JWT_SECRET,\n      { expiresIn: '1h' },\n    );\n    res.json({ token });\n  } else {\n    res.status(400).json({ msg: 'Invalid credentials' });\n  }\n});\n\n// @route   GET /api/data\n// @desc    Get some protected data\n// @access  Private\nrouter.get('/data', authMiddleware, async (req, res) => {\n  try {\n    const items = await Model.find();\n    res.json({ \n      message: 'This is protected data.',\n      user: req.user, // User info from token\n      data: items\n    });\n  } catch (err) {\n    res.status(500).send('Server Error');\n  }\n});\n\nmodule.exports = router;\n",
+      "backend/src/models/Model.js": "const mongoose = require('mongoose');\n\nconst ModelSchema = new mongoose.Schema({\n  name: {\n    type: String,\n    required: true,\n    trim: true\n  },\n  createdAt: {\n    type: Date,\n    default: Date.now\n  }\n});\n\nmodule.exports = mongoose.model('Model', ModelSchema);\n",
+      "backend/src/middleware/auth.js": "const jwt = require('jsonwebtoken');\n\nmodule.exports = function(req, res, next) {\n  // Get token from header\n  const authHeader = req.header('Authorization');\n\n  // Check if not token\n  if (!authHeader) {\n    return res.status(401).json({ msg: 'No token, authorization denied' });\n  }\n\n  // Check for 'Bearer ' prefix and extract token\n  const token = authHeader.startsWith('Bearer ') ? authHeader.substring(7, authHeader.length) : null;\n\n  if (!token) {\n    return res.status(401).json({ msg: 'Token format is invalid' });\n  }\n\n  // Verify token\n  try {\n    const decoded = jwt.verify(token, process.env.JWT_SECRET);\n    req.user = decoded.user;\n    next();\n  } catch (err) {\n    res.status(401).json({ msg: 'Token is not valid' });\n  }\n};\n"
+    },
+    "logs": [
+      {
+        "phase": "backend_generation",
+        "message": "Generated 6 backend files using Gemini 2.5 Pro",
+        "timestamp": "2025-12-04T12:45:47.208228"
+      }
+    ]
+  }
+}

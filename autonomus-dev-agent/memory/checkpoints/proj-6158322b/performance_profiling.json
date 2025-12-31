@@ -1,0 +1,21 @@
+{
+  "project_id": "proj-6158322b",
+  "step_name": "performance_profiling",
+  "timestamp": "2025-12-04T12:49:04.197479",
+  "state": {
+    "performance_tests": {},
+    "logs": [
+      {
+        "phase": "performance_profiling",
+        "message": "Performance profiling failed: 'NoneType' object has no attribute 'get'",
+        "timestamp": "2025-12-04T12:45:47.208228"
+      }
+    ],
+    "errors": [
+      "'str' object has no attribute 'get'",
+      "'str' object has no attribute 'get'",
+      "'NoneType' object has no attribute 'get'",
+      "'NoneType' object has no attribute 'get'"
+    ]
+  }
+}

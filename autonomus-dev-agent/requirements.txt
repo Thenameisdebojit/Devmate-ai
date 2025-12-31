@@ -1,0 +1,62 @@
+# Core LLM Frameworks
+langgraph>=0.2.45
+langchain>=0.3.7
+langchain-openai>=0.2.8
+langchain-google-genai>=2.0.8
+langchain-community>=0.3.7
+langchain-core>=0.3.21
+
+# State Management & Memory
+langgraph-checkpoint>=2.0.2
+langgraph-checkpoint-sqlite>=2.0.2
+
+# Vector Store & Memory
+chromadb>=0.5.23
+faiss-cpu>=1.9.0.post1
+
+# Container & Orchestration
+docker>=7.1.0
+kubernetes>=31.0.0
+
+# Code Analysis & Validation
+pylint>=3.3.2
+black>=24.10.0
+pytest>=8.3.4
+pytest-asyncio>=0.24.0
+bandit>=1.8.0
+
+# Utilities
+pydantic>=2.10.3
+pydantic-settings>=2.6.1
+python-dotenv>=1.0.1
+requests>=2.32.3
+aiohttp>=3.11.10
+
+# API & Web
+fastapi>=0.115.6
+uvicorn>=0.32.1
+
+# Data Processing
+pandas>=2.2.3
+numpy>=2.0.0  # Changed: Use numpy 2.0+ which has pre-built wheels for Python 3.13
+
+# Logging & Monitoring
+structlog>=24.4.0
+rich>=13.9.4
+
+# YAML & Config
+pyyaml>=6.0.2
+
+# Git operations
+gitpython>=3.1.43
+
+# Additional tools
+jinja2>=3.1.4
+click>=8.1.7
+
+# Google AI (for Gemini models)
+google-generativeai>=0.8.3
+
+# SQLite for checkpoints
+aiosqlite>=0.20
+sqlite-vec>=0.1.6
