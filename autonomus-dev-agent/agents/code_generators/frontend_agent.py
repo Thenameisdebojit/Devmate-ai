@@ -182,16 +182,29 @@ class FrontendGenerator:
         project_name = requirements.get('project_name', 'app')
         project_description = requirements.get('description', '') or user_input
         
-        # Build comprehensive system prompt
+        # Build comprehensive system prompt with stronger enforcement
         system_prompt = """You are an expert full-stack developer generating production-ready applications.
 
-CRITICAL REQUIREMENTS:
-1. Generate COMPLETE, WORKING applications - no placeholders, no TODOs
+CRITICAL REQUIREMENTS - MUST FOLLOW:
+1. Generate COMPLETE, WORKING applications - NO placeholders, NO TODOs, NO incomplete code
 2. Include ALL necessary files: package.json, configs, components, styles, routing, etc.
 3. Use modern best practices and latest framework patterns
 4. Include proper error handling, validation, and user feedback
 5. Generate clean, maintainable code with helpful comments
 6. Make the app fully functional and runnable locally
+7. EVERY file must be COMPLETE and FUNCTIONAL - no partial implementations
+
+MANDATORY FILE REQUIREMENTS:
+- frontend/package.json: MUST include all dependencies, scripts (dev, build, start, test)
+- frontend/src/App.tsx or App.jsx: MUST be complete main component with full functionality
+- frontend/src/index.tsx or index.jsx: MUST be complete entry point with proper setup
+- frontend/vite.config.ts or vite.config.js: MUST be complete Vite configuration
+- frontend/tsconfig.json or jsconfig.json: MUST be complete TypeScript/JavaScript configuration
+- frontend/src/components/: MUST include all necessary component files
+- frontend/src/styles/ or frontend/src/App.css: MUST include complete styling
+- frontend/README.md: MUST include setup and run instructions
+- frontend/.gitignore: MUST include proper gitignore
+- frontend/.env.example: MUST include environment variables template (if needed)
 
 Output format (ONLY valid JSON, no markdown):
 {
@@ -205,7 +218,10 @@ Output format (ONLY valid JSON, no markdown):
   "frontend/README.md": "setup instructions"
 }
 
-CRITICAL: Output ONLY the JSON object. No explanations, no markdown code blocks, no comments outside JSON."""
+CRITICAL: 
+- Output ONLY the JSON object. No explanations, no markdown code blocks, no comments outside JSON.
+- Generate MINIMUM 8-10 files for a complete application
+- Each file must be FULLY IMPLEMENTED with no placeholders"""
         
         # Build detailed user prompt based on actual requirements
         user_prompt = f"""Generate a COMPLETE, PRODUCTION-READY {framework} application based on these requirements:
@@ -245,34 +261,69 @@ Generate ALL files needed for a complete, runnable application. Output ONLY the 
             HumanMessage(content=user_prompt),
         ]
         
-        try:
-            response = self.llm.invoke(messages)
-            content = getattr(response, "content", str(response))
-            
-            logger.debug(f"Raw LLM response length: {len(content)} chars")
-            
-            content = self._extract_json(content)
-            
-            if not content or content == "{}":
-                logger.error("JSON extraction returned empty object")
-                return {}
-            
+        # Retry logic for more reliable generation
+        max_retries = 3
+        for attempt in range(max_retries):
             try:
-                code_files = json.loads(content)
-                if isinstance(code_files, dict) and code_files:
-                    logger.info(f"Gemini 2.5 Pro generated {len(code_files)} frontend files")
-                    return code_files
-                logger.warning("Frontend response is not a valid dictionary")
-                return {}
-            except json.JSONDecodeError as e:
-                logger.error(f"Failed to parse frontend JSON: {e}")
-                self._save_debug_response(content, "failed_parse")
+                logger.info(f"Frontend generation attempt {attempt + 1}/{max_retries}")
+                response = self.llm.invoke(messages)
+                content = getattr(response, "content", str(response))
+                
+                logger.debug(f"Raw LLM response length: {len(content)} chars")
+                
+                content = self._extract_json(content)
+                
+                if not content or content == "{}":
+                    if attempt < max_retries - 1:
+                        logger.warning(f"Empty JSON on attempt {attempt + 1}, retrying...")
+                        continue
+                    logger.error("JSON extraction returned empty object after all retries")
+                    return {}
+                
+                try:
+                    code_files = json.loads(content)
+                    if isinstance(code_files, dict) and code_files:
+                        file_count = len(code_files)
+                        logger.info(f"Gemini 2.5 Pro generated {file_count} frontend files")
+                        
+                        # Validate minimum file count
+                        if file_count < 5:
+                            if attempt < max_retries - 1:
+                                logger.warning(f"Only {file_count} files generated, retrying for more complete generation...")
+                                # Add more explicit instruction for retry
+                                retry_prompt = user_prompt + "\n\nIMPORTANT: You must generate AT LEAST 8-10 complete files. The previous attempt only generated " + str(file_count) + " files. Generate MORE files including all necessary components, styles, and configuration files."
+                                messages = [
+                                    SystemMessage(content=system_prompt),
+                                    HumanMessage(content=retry_prompt),
+                                ]
+                                continue
+                            else:
+                                logger.warning(f"Only {file_count} files generated after all retries, but returning what we have")
+                        
+                        return code_files
+                    logger.warning("Frontend response is not a valid dictionary")
+                    if attempt < max_retries - 1:
+                        continue
+                    return {}
+                except json.JSONDecodeError as e:
+                    logger.error(f"Failed to parse frontend JSON on attempt {attempt + 1}: {e}")
+                    self._save_debug_response(content, f"failed_parse_attempt_{attempt + 1}")
+                    if attempt < max_retries - 1:
+                        logger.info("Retrying with clearer JSON extraction...")
+                        continue
+                    return {}
+            
+            except Exception as e:
+                logger.error(f"Error generating frontend code on attempt {attempt + 1}: {e}")
+                traceback.print_exc()
+                if attempt < max_retries - 1:
+                    logger.info("Retrying after error...")
+                    continue
                 return {}
         
-        except Exception as e:
-            logger.error(f"Error generating frontend code: {e}")
-            traceback.print_exc()
-            return {}
+        # If we get here, all retries failed
+        logger.error("All frontend generation attempts failed")
+        return {}
 
 
 def frontend_generator_node(state: Dict[str, Any]) -> Dict[str, Any]:

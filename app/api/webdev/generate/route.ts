@@ -64,19 +64,42 @@ Also include setup instructions at the end.`
 
         send({ type: 'status', message: 'Generating code with AI...' })
 
-        const response = await callAIModelWithFailover({
-          prompt,
-          domain: 'web-dev',
-          action: 'generate',
-          systemInstruction,
-          temperature: 0.4,
-          maxTokens: 8192,
-        }, selectedModel)
+        let response
+        try {
+          response = await callAIModelWithFailover({
+            prompt,
+            domain: 'web-dev',
+            action: 'generate',
+            systemInstruction,
+            temperature: 0.4,
+            maxTokens: 8192,
+          }, selectedModel)
+        } catch (aiError: any) {
+          console.error('AI model error:', aiError)
+          send({ type: 'error', message: `AI generation failed: ${aiError.message || 'Unknown error. Please try again or check your API keys.'}` })
+          send({ type: 'done' })
+          controller.close()
+          return
+        }
 
         send({ type: 'status', message: 'Processing generated code...' })
 
+        if (!response || !response.text) {
+          send({ type: 'error', message: 'No response from AI model. Please try again.' })
+          send({ type: 'done' })
+          controller.close()
+          return
+        }
+
         const files = parseGeneratedFiles(response.text)
         const setup = extractSetupInstructions(response.text)
+
+        if (files.length === 0) {
+          send({ type: 'error', message: 'No files were generated. The AI response may be incomplete. Please try again with a more specific prompt.' })
+          send({ type: 'done' })
+          controller.close()
+          return
+        }
 
         const rawProject = {
           name: extractProjectName(prompt),
@@ -87,7 +110,16 @@ Also include setup instructions at the end.`
         }
 
         // Validate project structure
-        const validatedProject = validateProject(rawProject)
+        let validatedProject
+        try {
+          validatedProject = validateProject(rawProject)
+        } catch (validationError: any) {
+          console.error('Validation error:', validationError)
+          send({ type: 'error', message: `Project validation failed: ${validationError.message || 'Invalid project structure'}` })
+          send({ type: 'done' })
+          controller.close()
+          return
+        }
 
         send({ type: 'project', data: validatedProject })
         send({ type: 'done' })
@@ -95,9 +127,8 @@ Also include setup instructions at the end.`
         controller.close()
       } catch (error: any) {
         console.error('Generation error:', error)
-        controller.enqueue(
-          encoder.encode(`data: ${JSON.stringify({ type: 'error', message: error.message })}\n\n`)
-        )
+        send({ type: 'error', message: error.message || 'Failed to generate project. Please try again.' })
+        send({ type: 'done' })
         controller.close()
       }
     },

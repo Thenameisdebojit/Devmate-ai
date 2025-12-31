@@ -217,22 +217,42 @@ Fixed code with brief explanation of changes.`
               return `Assistant: ${m.content}`
             }).join('\n\n')
             
-            for await (const text of streamAIModelWithFailover({
-              prompt: fullPrompt,
-              systemInstruction: systemMessage,
-              temperature,
-              maxTokens: 4096,
-              action,
-              domain,
-            }, selectedAgent)) {
-              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text })}\n\n`))
+            try {
+              for await (const text of streamAIModelWithFailover({
+                prompt: fullPrompt,
+                systemInstruction: systemMessage,
+                temperature,
+                maxTokens: 4096,
+                action,
+                domain,
+              }, selectedAgent)) {
+                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text })}\n\n`))
+              }
+              
+              controller.enqueue(encoder.encode('data: [DONE]\n\n'))
+              controller.close()
+            } catch (streamError: any) {
+              console.error('Streaming error:', streamError)
+              // Send error message to client before closing
+              controller.enqueue(
+                encoder.encode(`data: ${JSON.stringify({ 
+                  error: streamError.message || 'Network error occurred. Please try again.',
+                  type: 'error'
+                })}\n\n`)
+              )
+              controller.enqueue(encoder.encode('data: [DONE]\n\n'))
+              controller.close()
             }
-            
+          } catch (error: any) {
+            console.error('Streaming setup error:', error)
+            controller.enqueue(
+              encoder.encode(`data: ${JSON.stringify({ 
+                error: error.message || 'Failed to initialize streaming. Please try again.',
+                type: 'error'
+              })}\n\n`)
+            )
             controller.enqueue(encoder.encode('data: [DONE]\n\n'))
             controller.close()
-          } catch (error) {
-            console.error('Streaming error:', error)
-            controller.error(error)
           }
         },
       })

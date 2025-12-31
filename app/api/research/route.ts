@@ -17,28 +17,38 @@ interface Source {
 }
 
 async function analyzeIntent(query: string, selectedModel: string): Promise<string> {
-  const response = await callAIModelWithFailover({
-    prompt: query,
-    domain: 'research',
-    action: 'analyze',
-    systemInstruction: 'You are a query classifier. Classify the user query as one of: academic, code, research, or hybrid. Respond with only one word.',
-    temperature: 0.1,
-    maxTokens: 10,
-  }, selectedModel)
-  return response.text.toLowerCase().trim() || 'research'
+  try {
+    const response = await callAIModelWithFailover({
+      prompt: query,
+      domain: 'research',
+      action: 'analyze',
+      systemInstruction: 'You are a query classifier. Classify the user query as one of: academic, code, research, or hybrid. Respond with only one word.',
+      temperature: 0.1,
+      maxTokens: 10,
+    }, selectedModel)
+    return response.text.toLowerCase().trim() || 'research'
+  } catch (error: any) {
+    console.warn('Intent analysis failed, defaulting to research:', error.message)
+    return 'research'
+  }
 }
 
 async function expandQuery(query: string, selectedModel: string): Promise<string[]> {
-  const response = await callAIModelWithFailover({
-    prompt: query,
-    domain: 'research',
-    action: 'expand',
-    systemInstruction: 'Generate 2-3 related search queries to help find comprehensive information. Return only the queries, one per line, without numbering.',
-    temperature: 0.7,
-    maxTokens: 150,
-  }, selectedModel)
-  const expanded = response.text.trim().split('\n').filter((q: string) => q.trim()) || []
-  return [query, ...expanded.slice(0, 2)]
+  try {
+    const response = await callAIModelWithFailover({
+      prompt: query,
+      domain: 'research',
+      action: 'expand',
+      systemInstruction: 'Generate 2-3 related search queries to help find comprehensive information. Return only the queries, one per line, without numbering.',
+      temperature: 0.7,
+      maxTokens: 150,
+    }, selectedModel)
+    const expanded = response.text.trim().split('\n').filter((q: string) => q.trim()) || []
+    return [query, ...expanded.slice(0, 2)]
+  } catch (error: any) {
+    console.warn('Query expansion failed, using original query:', error.message)
+    return [query]
+  }
 }
 
 async function retrieveWebResults(queries: string[], searchDepth: 'basic' | 'advanced' = 'basic'): Promise<any[]> {
@@ -139,8 +149,9 @@ Return the indices of the top 5 most credible and relevant sources in order, com
     const fallbackSources = sourcesWithContent.slice(0, 5)
     
     return topSources.length > 0 ? topSources : fallbackSources
-  } catch (error) {
-    console.error('Ranking error, using default order:', error)
+  } catch (error: any) {
+    console.error('Ranking error, using default order:', error.message)
+    // Return sources in default order if ranking fails
     return sourcesWithContent.slice(0, 5)
   }
 }

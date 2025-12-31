@@ -44,6 +44,12 @@ class ArtifactWriter:
             "total_bytes": 0
         }
         
+        # Validate generated_code
+        if not generated_code:
+            logger.warning(f"No generated code provided for project {project_id}")
+        else:
+            logger.info(f"Writing {len(generated_code)} code files for project {project_id}")
+        
         # Write generated code
         for filepath, content in generated_code.items():
             full_path = project_dir / filepath
@@ -56,13 +62,20 @@ class ArtifactWriter:
                 elif not isinstance(content, str):
                     content = str(content)
                 
+                # Validate content is not empty
+                if not content or (isinstance(content, str) and len(content.strip()) == 0):
+                    logger.warning(f"Skipping empty file: {filepath}")
+                    continue
+                
                 full_path.write_text(content, encoding="utf-8")
                 stats["files_written"] += 1
                 stats["total_lines"] += content.count("\n")
                 stats["total_bytes"] += len(content.encode("utf-8"))
-                logger.debug(f"Wrote: {filepath}")
+                logger.info(f"✓ Wrote: {filepath} ({len(content)} chars)")
             except Exception as e:
-                logger.error(f"Failed to write {filepath}: {e}")
+                logger.error(f"✗ Failed to write {filepath}: {e}")
+                import traceback
+                logger.error(traceback.format_exc())
         
         # Write Docker configs - FIXED: Handle naming collisions
         for filename, content in docker_config.items():
@@ -141,7 +154,12 @@ class ArtifactWriter:
         except Exception as e:
             logger.error(f"Failed to write README: {e}")
         
-        logger.info(f"Wrote {stats['files_written']} files to {project_dir}")
+        logger.info(f"✓ Artifact writing complete: {stats['files_written']} files written to {project_dir}")
+        
+        # Validate minimum file count
+        if stats['files_written'] < 3:
+            logger.warning(f"⚠ Only {stats['files_written']} files were written. Expected more files for a complete project.")
+        
         return stats
     
     def _generate_readme(self, validation_report: Dict[str, Any]) -> str:
@@ -230,6 +248,14 @@ def artifact_writer_node(state: Dict[str, Any]) -> Dict[str, Any]:
         docker_config = state.get("docker_config", {})
         k8s_manifests = state.get("k8s_manifests", {})
         validation_report = state.get("validation_report", {})
+        
+        # Log what we're about to write
+        logger.info(f"Artifact writer: project_id={project_id}, code_files={len(generated_code)}, docker_configs={len(docker_config)}, k8s_manifests={len(k8s_manifests) if isinstance(k8s_manifests, dict) else 0}")
+        
+        # Validate generated_code is a dict
+        if not isinstance(generated_code, dict):
+            logger.error(f"generated_code is not a dict: {type(generated_code)}")
+            generated_code = {}
         
         stats = writer.write_artifacts(
             project_id,

@@ -20,10 +20,10 @@ class Config:
     vercel_token: str = os.getenv("VERCEL_TOKEN", "")
     netlify_token: str = os.getenv("NETLIFY_TOKEN", "")
     
-    # Model Settings
-    default_model: str = "models/gemini-1.5-flash"
-    thinking_model: str = "models/gemini-1.5-flash"
-    fast_model: str = "models/gemini-1.5-flash"
+    # Model Settings - Updated to Gemini 2.5
+    default_model: str = "gemini-2.5-flash"
+    thinking_model: str = "gemini-2.5-pro"
+    fast_model: str = "gemini-2.5-flash"
     
     # Generation Settings
     max_tokens: int = 8192
@@ -77,45 +77,45 @@ class FrameworkConfig:
     
     model_configs: Dict[str, Dict[str, Any]] = {
         "planning": {
-            "model": "models/gemini-1.5-flash",  # ← FIXED: Use stable model
+            "model": "gemini-2.5-flash",  # Updated to Gemini 2.5
             "temperature": 0.5,
             "max_tokens": 8192,
             "top_p": 0.85,
         },
         "code": {
-            "model": "models/gemini-1.5-flash",  # ← FIXED
+            "model": "gemini-2.5-pro",  # Use Pro for code generation for better quality
             "temperature": 0.7,
-            "max_tokens": 8192,
+            "max_tokens": 16384,  # Increased for complete code generation
             "top_p": 0.9,
         },
         "validation": {
-            "model": "models/gemini-1.5-flash",  # ← FIXED: Use stable model
+            "model": "gemini-2.5-flash",  # Flash is sufficient for validation
             "temperature": 0.3,
             "max_tokens": 8192,
             "top_p": 0.85,
         },
         "validation_fallback": {
-            "model": "models/gemini-1.5-flash",
+            "model": "gemini-2.5-flash",
             "temperature": 0.3,
             "max_tokens": 8192,
             "top_p": 0.85,
         },
         "testing": {
-            "model": "models/gemini-1.5-flash",
+            "model": "gemini-2.5-flash",
             "temperature": 0.3,
             "max_tokens": 8192,
             "top_p": 0.85,
         },
         "security": {
-            "model": "models/gemini-1.5-flash",
+            "model": "gemini-2.5-flash",
             "temperature": 0.2,
             "max_tokens": 4096,
             "top_p": 0.8,
         },
         "refactor": {
-            "model": "models/gemini-1.5-flash",
+            "model": "gemini-2.5-pro",  # Use Pro for refactoring
             "temperature": 0.2,
-            "max_tokens": 8192,
+            "max_tokens": 16384,
             "top_p": 0.85,
         },
     }

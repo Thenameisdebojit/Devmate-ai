@@ -141,14 +141,27 @@ class BackendGenerator:
         
         system_prompt = f"""You are an expert {framework} backend developer generating production-ready APIs.
 
-CRITICAL REQUIREMENTS:
-1. Generate COMPLETE, WORKING backend code - no placeholders, no TODOs
+CRITICAL REQUIREMENTS - MUST FOLLOW:
+1. Generate COMPLETE, WORKING backend code - NO placeholders, NO TODOs, NO incomplete code
 2. Include ALL necessary files: package.json, server files, routes, models, middleware, configs
 3. Use modern best practices: proper error handling, validation, security
 4. Include database integration with {database}
 5. Include authentication/authorization if needed
 6. Include API documentation and setup instructions
 7. Make it production-ready with proper environment configuration
+8. EVERY file must be COMPLETE and FUNCTIONAL - no partial implementations
+
+MANDATORY FILE REQUIREMENTS:
+- backend/package.json: MUST include all dependencies, scripts (start, dev, test)
+- backend/src/server.js or server.ts: MUST be complete server setup with Express/FastAPI
+- backend/src/routes/ or backend/src/api/: MUST include complete API routes with CRUD operations
+- backend/src/models/: MUST include database models for {database}
+- backend/src/middleware/: MUST include authentication, error handling, validation middleware
+- backend/src/config/: MUST include database connection, environment config
+- backend/src/utils/: MUST include helper functions, validators
+- backend/.env.example: MUST include all environment variables needed
+- backend/.gitignore: MUST include proper gitignore
+- backend/README.md: MUST include setup instructions and API documentation
 
 Output format (ONLY valid JSON, no markdown):
 {{
@@ -161,7 +174,10 @@ Output format (ONLY valid JSON, no markdown):
   "backend/README.md": "setup and API documentation"
 }}
 
-CRITICAL: Output ONLY the JSON object. No explanations, no markdown code blocks."""
+CRITICAL: 
+- Output ONLY the JSON object. No explanations, no markdown code blocks.
+- Generate MINIMUM 8-10 files for a complete backend
+- Each file must be FULLY IMPLEMENTED with no placeholders"""
         
         user_prompt = f"""Generate a COMPLETE, PRODUCTION-READY {framework} backend API based on these requirements:
 
@@ -203,32 +219,71 @@ Generate ALL files needed for a complete, runnable backend API. Output ONLY the 
             HumanMessage(content=user_prompt),
         ]
         
-        try:
-            response = self.llm.invoke(messages)
-            content = getattr(response, "content", None)
-            if content is None:
-                content = str(response)
-            content = content or "{}"
-            
-            # Extract and clean JSON
-            content = self._extract_json(content)
-            
+        # Retry logic for more reliable generation
+        max_retries = 3
+        for attempt in range(max_retries):
             try:
-                code_files = json.loads(content)
-                if isinstance(code_files, dict) and code_files:
-                    logger.info(f"Gemini 2.5 Pro generated {len(code_files)} backend files")
-                    return code_files
-                logger.warning("Backend response is not a valid dictionary, returning empty")
-                return {}
-            except json.JSONDecodeError as e:
-                logger.warning(f"Failed to parse backend JSON: {e}")
-                logger.debug(f"Raw content: {content[:500]}")
+                logger.info(f"Backend generation attempt {attempt + 1}/{max_retries}")
+                response = self.llm.invoke(messages)
+                content = getattr(response, "content", None)
+                if content is None:
+                    content = str(response)
+                content = content or "{}"
+                
+                # Extract and clean JSON
+                content = self._extract_json(content)
+                
+                if not content or content == "{}":
+                    if attempt < max_retries - 1:
+                        logger.warning(f"Empty JSON on attempt {attempt + 1}, retrying...")
+                        continue
+                    logger.error("JSON extraction returned empty object after all retries")
+                    return {}
+                
+                try:
+                    code_files = json.loads(content)
+                    if isinstance(code_files, dict) and code_files:
+                        file_count = len(code_files)
+                        logger.info(f"Gemini 2.5 Pro generated {file_count} backend files")
+                        
+                        # Validate minimum file count
+                        if file_count < 5:
+                            if attempt < max_retries - 1:
+                                logger.warning(f"Only {file_count} files generated, retrying for more complete generation...")
+                                # Add more explicit instruction for retry
+                                retry_prompt = user_prompt + "\n\nIMPORTANT: You must generate AT LEAST 8-10 complete files. The previous attempt only generated " + str(file_count) + " files. Generate MORE files including all routes, models, middleware, and configuration files."
+                                messages = [
+                                    SystemMessage(content=system_prompt),
+                                    HumanMessage(content=retry_prompt),
+                                ]
+                                continue
+                            else:
+                                logger.warning(f"Only {file_count} files generated after all retries, but returning what we have")
+                        
+                        return code_files
+                    logger.warning("Backend response is not a valid dictionary")
+                    if attempt < max_retries - 1:
+                        continue
+                    return {}
+                except json.JSONDecodeError as e:
+                    logger.warning(f"Failed to parse backend JSON on attempt {attempt + 1}: {e}")
+                    logger.debug(f"Raw content: {content[:500]}")
+                    if attempt < max_retries - 1:
+                        logger.info("Retrying with clearer JSON extraction...")
+                        continue
+                    return {}
+            
+            except Exception as e:
+                logger.error(f"Error generating backend code on attempt {attempt + 1}: {e}")
+                traceback.print_exc()
+                if attempt < max_retries - 1:
+                    logger.info("Retrying after error...")
+                    continue
                 return {}
         
-        except Exception as e:
-            logger.error(f"Error generating backend code: {e}")
-            traceback.print_exc()
-            return {}
+        # If we get here, all retries failed
+        logger.error("All backend generation attempts failed")
+        return {}
 
 
 def backend_generator_node(state: Dict[str, Any]) -> Dict[str, Any]:

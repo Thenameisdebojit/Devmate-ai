@@ -74,10 +74,26 @@ export default function WebDevPage() {
         for (const line of lines) {
           if (line.startsWith('data: ')) {
             const data = line.slice(6)
-            if (data === '[DONE]') continue
+            if (data === '[DONE]') {
+              setIsGenerating(false)
+              continue
+            }
 
             try {
               const parsed = JSON.parse(data)
+              
+              if (parsed.type === 'error') {
+                console.error('Generation error:', parsed.message)
+                alert(`Generation failed: ${parsed.message}`)
+                setIsGenerating(false)
+                break
+              }
+              
+              if (parsed.type === 'status') {
+                console.log('Status:', parsed.message)
+                // Could show status updates in UI if needed
+              }
+              
               if (parsed.type === 'project') {
                 // Validate project structure
                 const { validateProject } = await import('@/lib/aiSchemas')
@@ -96,6 +112,7 @@ export default function WebDevPage() {
                 
                 // Trigger history update event
                 window.dispatchEvent(new Event('webdev-history-updated'))
+                setIsGenerating(false)
               }
             } catch (e) {
               console.error('Parse error:', e)
@@ -103,8 +120,10 @@ export default function WebDevPage() {
           }
         }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Generation error:', error)
+      alert(`Generation failed: ${error.message || 'Unknown error'}`)
+      setIsGenerating(false)
     } finally {
       setIsGenerating(false)
     }

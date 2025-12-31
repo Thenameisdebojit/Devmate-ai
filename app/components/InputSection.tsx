@@ -267,9 +267,22 @@ export default function InputSection({ onNewChat }: InputSectionProps) {
         await readWithTimeout()
       }
     } catch (err: any) {
-      toast.error(err.message || 'Failed to process request')
+      console.error('Chat error:', err)
+      const errorMessage = err.message || 'Failed to process request. Please try again or check your API keys.'
+      toast.error(errorMessage)
+      
+      // Update the last assistant message with error instead of removing it
       const { messages } = useChatStore.getState()
-      if (messages.length >= 2) {
+      if (messages.length > 0 && messages[messages.length - 1].type === 'assistant') {
+        const updatedMessages = [...messages]
+        updatedMessages[updatedMessages.length - 1] = {
+          ...updatedMessages[updatedMessages.length - 1],
+          content: `❌ **Error**: ${errorMessage}\n\nPlease try:\n1. Checking your API keys are configured\n2. Trying a different AI model\n3. Waiting a moment and retrying`,
+          modelUsed: updatedMessages[updatedMessages.length - 1].modelUsed || 'error'
+        }
+        useChatStore.setState({ messages: updatedMessages })
+      } else if (messages.length >= 2) {
+        // If no assistant message exists, remove both user and any placeholder assistant
         useChatStore.setState({ 
           messages: messages.slice(0, -2) 
         })

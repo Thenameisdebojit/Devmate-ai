@@ -22,9 +22,16 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 })
 
-const gemini = new GoogleGenAI({ 
-  apiKey: process.env.GEMINI_API_KEY
-})
+// Initialize GoogleGenAI with proper error handling
+let gemini: GoogleGenAI | null = null
+try {
+  gemini = new GoogleGenAI({ 
+    apiKey: process.env.GEMINI_API_KEY
+  })
+} catch (error) {
+  console.error('Failed to initialize GoogleGenAI:', error)
+  // Will throw error when actually used if not initialized
+}
 
 // DON'T DELETE THIS COMMENT - from blueprint:javascript_xai
 // xAI client is optional - only initialized if XAI_API_KEY is available
@@ -141,9 +148,42 @@ export function chooseModel(
     : 'google:gemini-2.5-flash'
 }
 
+// Helper function to check if error is a rate limit/quota error
+function isRateLimitError(error: any): boolean {
+  if (!error) return false
+  const errorMessage = error.message || error.toString() || ''
+  const errorCode = error.code || error.status || error.statusCode
+  
+  return (
+    errorCode === 429 ||
+    errorMessage.includes('429') ||
+    errorMessage.includes('quota') ||
+    errorMessage.includes('RESOURCE_EXHAUSTED') ||
+    errorMessage.includes('rate limit') ||
+    errorMessage.includes('rate_limit')
+  )
+}
+
+// Helper function to extract retry delay from error message
+function extractRetryDelay(error: any): number {
+  if (!error) return 5000 // Default 5 seconds
+  
+  const errorMessage = error.message || error.toString() || ''
+  const delayMatch = errorMessage.match(/retry in ([\d.]+)s/i) || 
+                     errorMessage.match(/retry-after[:\s]+(\d+)/i)
+  
+  if (delayMatch) {
+    const seconds = parseFloat(delayMatch[1])
+    return Math.min(seconds * 1000, 60000) // Max 60 seconds
+  }
+  
+  return 5000 // Default 5 seconds
+}
+
 export async function callAIModel(
   model: AIModel,
-  request: AIRequest
+  request: AIRequest,
+  retryCount: number = 0
 ): Promise<string> {
   const { prompt, systemInstruction, temperature = 0.3, maxTokens = 4096 } = request
   
@@ -170,31 +210,75 @@ export async function callAIModel(
     }
     
     if (model.startsWith('google')) {
+      if (!gemini) {
+        throw new Error('GoogleGenAI not initialized. Check GEMINI_API_KEY.')
+      }
+      
       const modelName = model.includes('flash') ? 'gemini-2.5-flash' : 'gemini-2.5-pro'
       
-      const requestParams: any = {
-        model: modelName,
-        contents: [
-          {
-            role: 'user',
-            parts: [{ text: prompt }]
+      try {
+        // Try the official @google/generative-ai API structure first
+        if (typeof (gemini as any).getGenerativeModel === 'function') {
+          const modelInstance = (gemini as any).getGenerativeModel({ 
+            model: modelName,
+            systemInstruction: systemInstruction || undefined,
+            generationConfig: {
+              temperature: temperature || 0.7,
+              maxOutputTokens: maxTokens || 4096,
+            }
+          })
+          
+          const result = await modelInstance.generateContent(prompt)
+          const response = result.response
+          return response.text() || ''
+        } else {
+          throw new Error('getGenerativeModel not available')
+        }
+      } catch (error: any) {
+        // Fallback to alternative API structure if the above fails
+        console.warn('Primary Gemini API call failed, trying fallback:', error.message)
+        
+        try {
+          // Alternative API structure
+          const requestParams: any = {
+            model: modelName,
+            contents: [
+              {
+                role: 'user',
+                parts: [{ text: prompt }]
+              }
+            ]
           }
-        ]
+          
+          if (systemInstruction) {
+            requestParams.systemInstruction = { text: systemInstruction }
+          }
+          
+          if (temperature || maxTokens) {
+            requestParams.config = {}
+            if (temperature) requestParams.config.temperature = temperature
+            if (maxTokens) requestParams.config.maxOutputTokens = maxTokens
+          }
+          
+          // Try different API methods
+          if ((gemini as any).models && (gemini as any).models.generateContent) {
+            const response = await (gemini as any).models.generateContent(requestParams)
+            return response.text || response.response?.text() || ''
+          } else if ((gemini as any).generateContent) {
+            const response = await (gemini as any).generateContent(requestParams)
+            return response.text || response.response?.text() || ''
+          } else {
+            throw new Error('Unknown GoogleGenAI API structure')
+          }
+        } catch (fallbackError: any) {
+          console.error('Gemini API fallback also failed:', fallbackError)
+          // Check if it's a rate limit error
+          if (isRateLimitError(fallbackError)) {
+            throw new Error(`Gemini API quota exceeded: ${fallbackError.message}`)
+          }
+          throw new Error(`Gemini API call failed: ${fallbackError.message}`)
+        }
       }
-      
-      if (systemInstruction) {
-        requestParams.systemInstruction = { text: systemInstruction }
-      }
-      
-      if (temperature || maxTokens) {
-        requestParams.config = {}
-        if (temperature) requestParams.config.temperature = temperature
-        if (maxTokens) requestParams.config.maxOutputTokens = maxTokens
-      }
-      
-      const response = await gemini.models.generateContent(requestParams)
-      
-      return response.text || ''
     }
     
     if (model.startsWith('xai')) {
@@ -224,6 +308,14 @@ export async function callAIModel(
     
     throw new Error(`Unsupported model: ${model}`)
   } catch (error: any) {
+    // Handle rate limit errors with retry logic
+    if (isRateLimitError(error) && retryCount < 2) {
+      const delay = extractRetryDelay(error)
+      console.warn(`Rate limit hit for ${model}, retrying after ${delay}ms (attempt ${retryCount + 1}/2)`)
+      await new Promise(resolve => setTimeout(resolve, delay))
+      return callAIModel(model, request, retryCount + 1)
+    }
+    
     console.error(`Error calling ${model}:`, error)
     throw error
   }
@@ -239,21 +331,56 @@ export async function callAIModelWithFailover(
     const text = await callAIModel(primaryModel, request)
     return { text, modelUsed: primaryModel }
   } catch (error: any) {
-    console.warn(`Primary model ${primaryModel} failed, attempting failover:`, error.message)
+    const isQuotaError = isRateLimitError(error)
+    console.warn(`Primary model ${primaryModel} failed${isQuotaError ? ' (quota exceeded)' : ''}, attempting failover:`, error.message)
     
-    // Smart failover logic with Flash as fast alternative
+    // Smart failover logic - prioritize OpenAI when Gemini has quota issues
     const fallbackModels: AIModel[] = []
     
-    if (primaryModel === 'openai:gpt-5') {
-      fallbackModels.push('openai:gpt-4o', 'google:gemini-2.5-flash', 'google:gemini-2.5-pro')
-    } else if (primaryModel === 'openai:gpt-4o') {
-      fallbackModels.push('openai:gpt-5', 'google:gemini-2.5-flash', 'google:gemini-2.5-pro')
-    } else if (primaryModel === 'google:gemini-2.5-pro') {
-      fallbackModels.push('google:gemini-2.5-flash', PREFERRED_GPT_MODEL === 'gpt-4o' ? 'openai:gpt-4o' : 'openai:gpt-5')
-    } else if (primaryModel === 'google:gemini-2.5-flash') {
-      fallbackModels.push('google:gemini-2.5-pro', PREFERRED_GPT_MODEL === 'gpt-4o' ? 'openai:gpt-4o' : 'openai:gpt-5')
+    // If Gemini failed due to quota, prioritize OpenAI models
+    if (isQuotaError && primaryModel.startsWith('google')) {
+      // Skip all Gemini models if quota exceeded
+      fallbackModels.push(
+        PREFERRED_GPT_MODEL === 'gpt-4o' ? 'openai:gpt-4o' : 'openai:gpt-5',
+        PREFERRED_GPT_MODEL === 'gpt-5' ? 'openai:gpt-4o' : 'openai:gpt-5'
+      )
+      if (xai) {
+        fallbackModels.push('xai:grok-4', 'xai:grok-2-1212')
+      }
     } else {
-      fallbackModels.push('google:gemini-2.5-flash', PREFERRED_GPT_MODEL === 'gpt-4o' ? 'openai:gpt-4o' : 'openai:gpt-5')
+      // Normal failover logic
+      if (primaryModel === 'openai:gpt-5') {
+        fallbackModels.push('openai:gpt-4o')
+        // Only add Gemini if we haven't seen quota errors recently
+        if (!isQuotaError) {
+          fallbackModels.push('google:gemini-2.5-flash', 'google:gemini-2.5-pro')
+        }
+        if (xai) fallbackModels.push('xai:grok-4')
+      } else if (primaryModel === 'openai:gpt-4o') {
+        fallbackModels.push('openai:gpt-5')
+        if (!isQuotaError) {
+          fallbackModels.push('google:gemini-2.5-flash', 'google:gemini-2.5-pro')
+        }
+        if (xai) fallbackModels.push('xai:grok-4')
+      } else if (primaryModel === 'google:gemini-2.5-pro') {
+        if (!isQuotaError) {
+          fallbackModels.push('google:gemini-2.5-flash')
+        }
+        fallbackModels.push(PREFERRED_GPT_MODEL === 'gpt-4o' ? 'openai:gpt-4o' : 'openai:gpt-5')
+        if (xai) fallbackModels.push('xai:grok-4')
+      } else if (primaryModel === 'google:gemini-2.5-flash') {
+        if (!isQuotaError) {
+          fallbackModels.push('google:gemini-2.5-pro')
+        }
+        fallbackModels.push(PREFERRED_GPT_MODEL === 'gpt-4o' ? 'openai:gpt-4o' : 'openai:gpt-5')
+        if (xai) fallbackModels.push('xai:grok-4')
+      } else {
+        if (!isQuotaError) {
+          fallbackModels.push('google:gemini-2.5-flash')
+        }
+        fallbackModels.push(PREFERRED_GPT_MODEL === 'gpt-4o' ? 'openai:gpt-4o' : 'openai:gpt-5')
+        if (xai) fallbackModels.push('xai:grok-4')
+      }
     }
     
     // Try each fallback model
@@ -263,7 +390,23 @@ export async function callAIModelWithFailover(
         console.log(`✓ Failover successful with ${fallbackModel}`)
         return { text, modelUsed: fallbackModel }
       } catch (fallbackError: any) {
-        console.warn(`✗ Failover model ${fallbackModel} also failed:`, fallbackError.message)
+        const isFallbackQuotaError = isRateLimitError(fallbackError)
+        if (isFallbackQuotaError && fallbackModel.startsWith('google')) {
+          console.warn(`✗ Fallback model ${fallbackModel} also has quota issues, skipping remaining Gemini models`)
+          // Remove remaining Gemini models from list
+          const geminiIndex = fallbackModels.indexOf(fallbackModel)
+          if (geminiIndex !== -1) {
+            fallbackModels.splice(geminiIndex)
+            // Remove any other Gemini models
+            for (let i = fallbackModels.length - 1; i >= 0; i--) {
+              if (fallbackModels[i].startsWith('google')) {
+                fallbackModels.splice(i, 1)
+              }
+            }
+          }
+        } else {
+          console.warn(`✗ Fallback model ${fallbackModel} also failed:`, fallbackError.message)
+        }
         continue
       }
     }
@@ -281,21 +424,55 @@ export async function* streamAIModelWithFailover(
   try {
     yield* streamAIModel(primaryModel, request)
   } catch (error: any) {
-    console.warn(`Primary streaming model ${primaryModel} failed, attempting failover:`, error.message)
+    const isQuotaError = isRateLimitError(error)
+    console.warn(`Primary streaming model ${primaryModel} failed${isQuotaError ? ' (quota exceeded)' : ''}, attempting failover:`, error.message)
     
-    // Smart failover logic with Flash as fast alternative
+    // Smart failover logic - prioritize OpenAI when Gemini has quota issues
     const fallbackModels: AIModel[] = []
     
-    if (primaryModel === 'openai:gpt-5') {
-      fallbackModels.push('openai:gpt-4o', 'google:gemini-2.5-flash', 'google:gemini-2.5-pro')
-    } else if (primaryModel === 'openai:gpt-4o') {
-      fallbackModels.push('openai:gpt-5', 'google:gemini-2.5-flash', 'google:gemini-2.5-pro')
-    } else if (primaryModel === 'google:gemini-2.5-pro') {
-      fallbackModels.push('google:gemini-2.5-flash', PREFERRED_GPT_MODEL === 'gpt-4o' ? 'openai:gpt-4o' : 'openai:gpt-5')
-    } else if (primaryModel === 'google:gemini-2.5-flash') {
-      fallbackModels.push('google:gemini-2.5-pro', PREFERRED_GPT_MODEL === 'gpt-4o' ? 'openai:gpt-4o' : 'openai:gpt-5')
+    // If Gemini failed due to quota, prioritize OpenAI models
+    if (isQuotaError && primaryModel.startsWith('google')) {
+      // Skip all Gemini models if quota exceeded
+      fallbackModels.push(
+        PREFERRED_GPT_MODEL === 'gpt-4o' ? 'openai:gpt-4o' : 'openai:gpt-5',
+        PREFERRED_GPT_MODEL === 'gpt-5' ? 'openai:gpt-4o' : 'openai:gpt-5'
+      )
+      if (xai) {
+        fallbackModels.push('xai:grok-4', 'xai:grok-2-1212')
+      }
     } else {
-      fallbackModels.push('google:gemini-2.5-flash', PREFERRED_GPT_MODEL === 'gpt-4o' ? 'openai:gpt-4o' : 'openai:gpt-5')
+      // Normal failover logic
+      if (primaryModel === 'openai:gpt-5') {
+        fallbackModels.push('openai:gpt-4o')
+        if (!isQuotaError) {
+          fallbackModels.push('google:gemini-2.5-flash', 'google:gemini-2.5-pro')
+        }
+        if (xai) fallbackModels.push('xai:grok-4')
+      } else if (primaryModel === 'openai:gpt-4o') {
+        fallbackModels.push('openai:gpt-5')
+        if (!isQuotaError) {
+          fallbackModels.push('google:gemini-2.5-flash', 'google:gemini-2.5-pro')
+        }
+        if (xai) fallbackModels.push('xai:grok-4')
+      } else if (primaryModel === 'google:gemini-2.5-pro') {
+        if (!isQuotaError) {
+          fallbackModels.push('google:gemini-2.5-flash')
+        }
+        fallbackModels.push(PREFERRED_GPT_MODEL === 'gpt-4o' ? 'openai:gpt-4o' : 'openai:gpt-5')
+        if (xai) fallbackModels.push('xai:grok-4')
+      } else if (primaryModel === 'google:gemini-2.5-flash') {
+        if (!isQuotaError) {
+          fallbackModels.push('google:gemini-2.5-pro')
+        }
+        fallbackModels.push(PREFERRED_GPT_MODEL === 'gpt-4o' ? 'openai:gpt-4o' : 'openai:gpt-5')
+        if (xai) fallbackModels.push('xai:grok-4')
+      } else {
+        if (!isQuotaError) {
+          fallbackModels.push('google:gemini-2.5-flash')
+        }
+        fallbackModels.push(PREFERRED_GPT_MODEL === 'gpt-4o' ? 'openai:gpt-4o' : 'openai:gpt-5')
+        if (xai) fallbackModels.push('xai:grok-4')
+      }
     }
     
     // Try each fallback model
@@ -305,7 +482,18 @@ export async function* streamAIModelWithFailover(
         yield* streamAIModel(fallbackModel, request)
         return
       } catch (fallbackError: any) {
-        console.warn(`✗ Streaming failover model ${fallbackModel} also failed:`, fallbackError.message)
+        const isFallbackQuotaError = isRateLimitError(fallbackError)
+        if (isFallbackQuotaError && fallbackModel.startsWith('google')) {
+          console.warn(`✗ Streaming fallback model ${fallbackModel} also has quota issues, skipping remaining Gemini models`)
+          // Remove remaining Gemini models
+          for (let i = fallbackModels.length - 1; i >= 0; i--) {
+            if (fallbackModels[i].startsWith('google')) {
+              fallbackModels.splice(i, 1)
+            }
+          }
+        } else {
+          console.warn(`✗ Streaming fallback model ${fallbackModel} also failed:`, fallbackError.message)
+        }
         continue
       }
     }
@@ -346,34 +534,80 @@ export async function* streamAIModel(
       }
     }
   } else if (model.startsWith('google')) {
+    if (!gemini) {
+      throw new Error('GoogleGenAI not initialized. Check GEMINI_API_KEY.')
+    }
+    
     const modelName = model.includes('flash') ? 'gemini-2.5-flash' : 'gemini-2.5-pro'
     
-    const requestParams: any = {
-      model: modelName,
-      contents: [
-        {
-          role: 'user',
-          parts: [{ text: prompt }]
+    try {
+      // Try the official @google/generative-ai streaming API structure first
+      if (typeof (gemini as any).getGenerativeModel === 'function') {
+        const modelInstance = (gemini as any).getGenerativeModel({ 
+          model: modelName,
+          systemInstruction: systemInstruction || undefined,
+          generationConfig: {
+            temperature: temperature || 0.7,
+            maxOutputTokens: maxTokens || 4096,
+          }
+        })
+        
+        const result = await modelInstance.generateContentStream(prompt)
+        
+        for await (const chunk of result.stream) {
+          const chunkText = chunk.text()
+          if (chunkText) {
+            yield chunkText
+          }
         }
-      ]
-    }
-    
-    if (systemInstruction) {
-      requestParams.systemInstruction = { text: systemInstruction }
-    }
-    
-    if (temperature || maxTokens) {
-      requestParams.config = {}
-      if (temperature) requestParams.config.temperature = temperature
-      if (maxTokens) requestParams.config.maxOutputTokens = maxTokens
-    }
-    
-    const response = await gemini.models.generateContentStream(requestParams)
-    
-    for await (const chunk of response) {
-      const text = chunk.text || ''
-      if (text) {
-        yield text
+        return
+      } else {
+        throw new Error('getGenerativeModel not available')
+      }
+    } catch (error: any) {
+      // Fallback to alternative API structure
+      console.warn('Primary Gemini streaming API failed, trying fallback:', error.message)
+      
+      try {
+        const requestParams: any = {
+          model: modelName,
+          contents: [
+            {
+              role: 'user',
+              parts: [{ text: prompt }]
+            }
+          ]
+        }
+        
+        if (systemInstruction) {
+          requestParams.systemInstruction = { text: systemInstruction }
+        }
+        
+        if (temperature || maxTokens) {
+          requestParams.config = {}
+          if (temperature) requestParams.config.temperature = temperature
+          if (maxTokens) requestParams.config.maxOutputTokens = maxTokens
+        }
+        
+        // Try different streaming API methods
+        let stream: any
+        if ((gemini as any).models && (gemini as any).models.generateContentStream) {
+          stream = await (gemini as any).models.generateContentStream(requestParams)
+        } else if ((gemini as any).generateContentStream) {
+          stream = await (gemini as any).generateContentStream(requestParams)
+        } else {
+          throw new Error('Unknown GoogleGenAI streaming API structure')
+        }
+        
+        for await (const chunk of stream) {
+          const text = chunk.text || chunk.response?.text() || ''
+          if (text) {
+            yield text
+          }
+        }
+      } catch (fallbackError: any) {
+        console.error('Gemini streaming API fallback also failed:', fallbackError)
+        throw new Error(`Gemini streaming API call failed: ${fallbackError.message}`)
       }
     }
   } else if (model.startsWith('xai')) {
