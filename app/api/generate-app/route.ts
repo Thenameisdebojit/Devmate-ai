@@ -17,6 +17,14 @@ interface GenerationStep {
 }
 
 export const runtime = 'nodejs'
+export const maxDuration = 300 // 5 minutes for Vercel Pro, 10s for Hobby
+
+// Simple logger for serverless environments
+const logger = {
+  info: (...args: any[]) => console.log('[INFO]', ...args),
+  warn: (...args: any[]) => console.warn('[WARN]', ...args),
+  error: (...args: any[]) => console.error('[ERROR]', ...args),
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -60,36 +68,40 @@ export async function POST(req: NextRequest) {
               status: 'in_progress'
             })
 
-            // Check if Python dependencies are installed
-            const checkDepsProcess = spawn(pythonCommand, ['-c', 'import langchain_google_genai; import langgraph; import langchain'], {
-              cwd: agentDir,
-              env: { ...process.env, PYTHONPATH: agentDir }
-            })
-
-            let depsCheckError = ''
-            checkDepsProcess.stderr.on('data', (data) => {
-              depsCheckError += data.toString()
-            })
-
-            await new Promise<void>((resolve, reject) => {
-              checkDepsProcess.on('close', (code) => {
-                if (code !== 0) {
-                  const errorMsg = `Python dependencies not installed for App Generator.\n\n` +
-                    `Please install them by running:\n` +
-                    `1. Open terminal/command prompt\n` +
-                    `2. cd autonomus-dev-agent\n` +
-                    `3. ${pythonCommand} -m pip install -r requirements.txt\n\n` +
-                    `Or run: autonomus-dev-agent/install-deps.bat (Windows) or install-deps.sh (Linux/Mac)\n\n` +
-                    `Error details: ${depsCheckError}`
-                  reject(new Error(errorMsg))
-                } else {
-                  resolve()
-                }
+            // Check if we're in a serverless environment (Vercel) where Python subprocess won't work
+            const isServerless = process.env.VERCEL === '1' || process.env.AWS_LAMBDA_FUNCTION_NAME || !process.env.PATH?.includes('python')
+            
+            if (!isServerless) {
+              // Check if Python dependencies are installed (only in non-serverless environments)
+              const checkDepsProcess = spawn(pythonCommand, ['-c', 'import langchain_google_genai; import langgraph; import langchain'], {
+                cwd: agentDir,
+                env: { ...process.env, PYTHONPATH: agentDir }
               })
-              checkDepsProcess.on('error', (error) => {
-                reject(new Error(`Failed to check Python dependencies: ${error.message}. Make sure Python is installed and in your PATH.`))
+
+              let depsCheckError = ''
+              checkDepsProcess.stderr.on('data', (data) => {
+                depsCheckError += data.toString()
               })
-            })
+
+              await new Promise<void>((resolve, reject) => {
+                checkDepsProcess.on('close', (code) => {
+                  if (code !== 0) {
+                    // Fallback to direct AI generation if Python deps not available
+                    logger.warn('Python dependencies not available, using direct AI generation')
+                    resolve() // Continue with fallback
+                  } else {
+                    resolve()
+                  }
+                })
+                checkDepsProcess.on('error', (error) => {
+                  // Fallback to direct AI generation
+                  logger.warn(`Python check failed: ${error.message}, using direct AI generation`)
+                  resolve() // Continue with fallback
+                })
+              })
+            } else {
+              logger.info('Serverless environment detected, using direct AI generation')
+            }
 
             sendStep({
               step: 1,
@@ -105,39 +117,79 @@ export async function POST(req: NextRequest) {
               status: 'in_progress'
             })
 
-            // Run Python script from the agent directory so relative imports work
-            const pythonProcess = spawn(pythonCommand, ['api_wrapper.py', prompt], {
-              cwd: agentDir,
-              env: { 
-                ...process.env, 
-                PYTHONUNBUFFERED: '1',
-                PYTHONPATH: agentDir
+            let projectData: any
+            let usePythonAgent = !isServerless
+
+            if (usePythonAgent) {
+              // Try to use Python agent
+              try {
+                // Run Python script from the agent directory so relative imports work
+                const pythonProcess = spawn(pythonCommand, ['api_wrapper.py', prompt], {
+                  cwd: agentDir,
+                  env: { 
+                    ...process.env, 
+                    PYTHONUNBUFFERED: '1',
+                    PYTHONPATH: agentDir
+                  }
+                })
+
+                let stdout = ''
+                let stderr = ''
+
+                pythonProcess.stdout.on('data', (data) => {
+                  stdout += data.toString()
+                })
+
+                pythonProcess.stderr.on('data', (data) => {
+                  stderr += data.toString()
+                })
+
+                await new Promise<void>((resolve, reject) => {
+                  pythonProcess.on('close', (code) => {
+                    if (code !== 0) {
+                      // Fallback to direct generation
+                      console.warn(`Python agent failed (code ${code}), using direct AI generation`)
+                      usePythonAgent = false
+                      resolve()
+                    } else {
+                      // Parse Python output
+                      try {
+                        const jsonMatch = stdout.match(/\{[\s\S]*\}/)
+                        if (jsonMatch) {
+                          projectData = JSON.parse(jsonMatch[0])
+                          if (projectData.success) {
+                            resolve()
+                          } else {
+                            throw new Error(projectData.error || 'Generation failed')
+                          }
+                        } else {
+                          throw new Error('No JSON found in Python output')
+                        }
+                      } catch (parseError: any) {
+                        console.warn(`Failed to parse Python output: ${parseError.message}, using direct AI generation`)
+                        usePythonAgent = false
+                        resolve()
+                      }
+                    }
+                  })
+                  pythonProcess.on('error', (error) => {
+                    console.warn(`Python process error: ${error.message}, using direct AI generation`)
+                    usePythonAgent = false
+                    resolve()
+                  })
+                })
+              } catch (error: any) {
+                console.warn(`Python agent error: ${error.message}, using direct AI generation`)
+                usePythonAgent = false
               }
-            })
+            }
 
-            let stdout = ''
-            let stderr = ''
-
-            pythonProcess.stdout.on('data', (data) => {
-              stdout += data.toString()
-            })
-
-            pythonProcess.stderr.on('data', (data) => {
-              stderr += data.toString()
-            })
-
-            await new Promise<void>((resolve, reject) => {
-              pythonProcess.on('close', (code) => {
-                if (code !== 0) {
-                  reject(new Error(`Python script failed with code ${code}: ${stderr}`))
-                } else {
-                  resolve()
-                }
-              })
-              pythonProcess.on('error', (error) => {
-                reject(new Error(`Failed to start Python script: ${error.message}`))
-              })
-            })
+            // Fallback to direct AI generation if Python agent not available or failed
+            if (!usePythonAgent || !projectData) {
+              const { generateAppDirect } = await import('@/lib/appGenerator')
+              projectData = await generateAppDirect(prompt)
+              projectData.success = true
+            }
 
             sendStep({
               step: 2,
@@ -152,27 +204,6 @@ export async function POST(req: NextRequest) {
               message: 'Processing generated files...',
               status: 'in_progress'
             })
-
-            // Parse JSON output
-            let projectData
-            try {
-              // Extract JSON from output (may have logging before/after)
-              const jsonMatch = stdout.match(/\{[\s\S]*\}/)
-              if (jsonMatch) {
-                projectData = JSON.parse(jsonMatch[0])
-              } else {
-                throw new Error('No JSON found in Python output')
-              }
-
-              if (!projectData.success) {
-                throw new Error(projectData.error || 'Generation failed')
-              }
-            } catch (parseError: any) {
-              console.error('Failed to parse Python output:', parseError)
-              console.error('Python stdout:', stdout)
-              console.error('Python stderr:', stderr)
-              throw new Error(`Failed to parse generation result: ${parseError.message}`)
-            }
 
             sendStep({
               step: 3,

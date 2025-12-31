@@ -1,0 +1,11 @@
+{
+  "functions": {
+    "app/api/generate-app/route.ts": {
+      "maxDuration": 300,
+      "memory": 3008
+    }
+  },
+  "buildCommand": "npm run build",
+  "installCommand": "npm install && cd autonomus-dev-agent && pip install -r requirements.txt || echo 'Python deps install skipped in build'"
+}
+
