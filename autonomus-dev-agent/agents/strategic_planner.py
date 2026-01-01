@@ -110,9 +110,34 @@ def strategic_planner_node(state: Dict[str, Any]) -> Dict[str, Any]:
     planner = StrategicPlanner()
     plan = planner.create_plan(state.get("requirements", {}))
     
+    # Ensure tech_stack is properly set from requirements if not in plan
+    tech_stack = plan.get("tech_stack", {})
+    if not tech_stack:
+        tech_stack = state.get("requirements", {}).get("tech_stack", {})
+    
+    # If still empty, infer from requirements
+    if not tech_stack:
+        requirements = state.get("requirements", {})
+        project_type = str(requirements.get("project_type", "")).lower()
+        user_input = str(state.get("user_input", "")).lower()
+        
+        if "web" in project_type or "website" in user_input or "webapp" in user_input:
+            if "next" in user_input or "nextjs" in user_input:
+                tech_stack["frontend"] = {"framework": "nextjs"}
+            else:
+                tech_stack["frontend"] = {"framework": "react"}
+        
+        if "full-stack" in project_type or "backend" in user_input or "api" in user_input:
+            if "express" in user_input or "node" in user_input:
+                tech_stack["backend"] = {"framework": "nodejs-express"}
+            elif "fastapi" in user_input:
+                tech_stack["backend"] = {"framework": "fastapi"}
+            else:
+                tech_stack["backend"] = {"framework": "nodejs-express"}
+    
     return {
         "architecture": plan.get("architecture", {}),
-        "tech_stack": plan.get("tech_stack", state.get("requirements", {}).get("tech_stack", {})),
+        "tech_stack": tech_stack,
         "task_plan": plan.get("tasks", []),
         "logs": [{
             "phase": "strategic_planning",

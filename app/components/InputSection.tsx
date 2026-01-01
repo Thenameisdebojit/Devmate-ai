@@ -242,6 +242,12 @@ export default function InputSection({ onNewChat }: InputSectionProps) {
                   try {
                     const parsed = JSON.parse(data)
                     
+                    // Handle error messages from the stream
+                    if (parsed.error || parsed.type === 'error') {
+                      const errorMsg = parsed.error || parsed.message || 'An error occurred while processing your request'
+                      throw new Error(errorMsg)
+                    }
+                    
                     if (parsed.modelUsed) {
                       currentModelUsed = parsed.modelUsed
                       console.log(`[AI Model] Using: ${parsed.modelUsed}`)
@@ -253,6 +259,9 @@ export default function InputSection({ onNewChat }: InputSectionProps) {
                       updateLastMessage(accumulatedText, currentModelUsed)
                     }
                   } catch (e) {
+                    if (e instanceof Error && e.message) {
+                      throw e
+                    }
                     console.warn('Failed to parse SSE chunk:', data)
                   }
                 }

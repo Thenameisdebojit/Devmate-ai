@@ -1,0 +1,15 @@
+{
+  "project_id": "proj-184236d9",
+  "step_name": "integration_test_generation",
+  "timestamp": "2025-12-31T21:31:44.165291",
+  "state": {
+    "integration_tests": {},
+    "logs": [
+      {
+        "phase": "integration_test_generation",
+        "message": "Skipped integration tests - no code available",
+        "timestamp": "2025-12-31T21:28:34.350004"
+      }
+    ]
+  }
+}

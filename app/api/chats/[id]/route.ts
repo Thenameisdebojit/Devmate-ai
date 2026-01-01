@@ -96,16 +96,21 @@ export async function PUT(
     }
 
     const { id } = await params
-    const { messages } = await req.json()
+    const { messages, domain } = await req.json()
 
     await connectDB()
+
+    const updateData: any = { messages }
+    if (domain) {
+      updateData.domain = domain
+    }
 
     const chat = await Chat.findOneAndUpdate(
       {
         _id: id,
         userId: currentUser.userId,
       },
-      { messages },
+      updateData,
       { new: true }
     )
 

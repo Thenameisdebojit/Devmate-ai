@@ -21,13 +21,35 @@ interface GeneratedProject {
 const SYSTEM_INSTRUCTION = `You are an expert full-stack application architect and developer.
 Generate complete, production-ready applications with proper project structure.
 
-CRITICAL REQUIREMENTS:
-1. Generate COMPLETE, WORKING applications - no placeholders, no TODOs
-2. Include ALL necessary files: package.json, configs, routes, components, etc.
+CRITICAL REQUIREMENTS - MUST FOLLOW:
+1. Generate COMPLETE, WORKING applications - NO placeholders, NO TODOs, NO incomplete code
+2. Include ALL necessary files: package.json, configs, routes, components, styles, etc.
 3. Use modern best practices and latest frameworks
 4. Include proper error handling and validation
 5. Generate clean, maintainable code with helpful comments
 6. Include setup instructions in README.md
+7. EVERY file must be FULLY IMPLEMENTED - no partial code
+8. Generate MINIMUM 10-15 files for a complete application
+
+MANDATORY FILES FOR FRONTEND:
+- package.json (with all dependencies and scripts)
+- Main entry file (index.tsx, App.tsx, etc.)
+- Component files for all features
+- Styling files (CSS/Tailwind)
+- Configuration files (vite.config, tsconfig.json, tailwind.config.js, etc.)
+- .gitignore
+- .env.example (if needed)
+- README.md with setup instructions
+
+MANDATORY FILES FOR BACKEND:
+- package.json or requirements.txt
+- Main server file
+- Route/API files
+- Model/schema files
+- Middleware files
+- Configuration files
+- .env.example
+- README.md
 
 OUTPUT FORMAT:
 Return a JSON object with this exact structure:
@@ -44,7 +66,10 @@ Return a JSON object with this exact structure:
   "setupInstructions": "step-by-step setup guide"
 }
 
-IMPORTANT: Output ONLY valid JSON, no markdown formatting.`
+IMPORTANT: 
+- Output ONLY valid JSON, no markdown formatting
+- Generate AT LEAST 10-15 complete files
+- Each file must be FULLY IMPLEMENTED with no placeholders`
 
 function detectFramework(prompt: string): string {
   const lowerPrompt = prompt.toLowerCase()
@@ -130,14 +155,27 @@ Remember to output ONLY valid JSON in the specified format.`
       throw new Error('Invalid project structure: missing files array')
     }
 
+    // Filter out empty files and validate
+    const validFiles = projectData.files
+      .map((f: any) => ({
+        path: typeof f === 'string' ? f : f.path || '',
+        content: typeof f === 'string' ? '' : (f.content || '').trim()
+      }))
+      .filter((f: any) => f.path && f.content) // Only include files with both path and content
+
+    if (validFiles.length === 0) {
+      throw new Error('No valid files were generated. Please try again with a more specific prompt.')
+    }
+
+    if (validFiles.length < 5) {
+      console.warn(`Only ${validFiles.length} files generated. Expected more for a complete application.`)
+    }
+
     return {
       projectName: projectData.projectName || 'generated-project',
       framework: projectData.framework || detectedFramework,
       description: projectData.description || prompt.substring(0, 100),
-      files: projectData.files.map((f: any) => ({
-        path: typeof f === 'string' ? f : f.path || '',
-        content: typeof f === 'string' ? '' : f.content || ''
-      })),
+      files: validFiles,
       setupInstructions: projectData.setupInstructions || generateDefaultSetupInstructions(detectedFramework)
     }
   } catch (error: any) {

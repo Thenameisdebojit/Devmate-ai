@@ -16,19 +16,28 @@ logger = logging.getLogger(__name__)
 
 
 class BackendGenerator:
-    """Agent that generates backend code using Gemini 2.5 Pro"""
+    """Agent that generates backend code using Gemini 1.5 Pro"""
     
     def __init__(self):
         """Initialize the backend generator with Gemini 2.5 Pro"""
         model_config = FRAMEWORK_CONFIG.model_configs["code"]
-        self.llm = ChatGoogleGenerativeAI(
-            model=model_config["model"],
-            temperature=model_config["temperature"],
-            max_tokens=model_config["max_tokens"],
-            google_api_key=CONFIG.google_api_key,
-            top_p=model_config.get("top_p", 0.9),
-        )
-        logger.info(f"Backend Generator initialized with {model_config['model']} (Gemini 2.5 Pro)")
+        
+        # Validate API key
+        if not CONFIG.google_api_key:
+            raise ValueError("GOOGLE_API_KEY not set. Please set it in your .env file or environment variables.")
+        
+        try:
+            self.llm = ChatGoogleGenerativeAI(
+                model=model_config["model"],
+                temperature=model_config["temperature"],
+                max_tokens=model_config["max_tokens"],
+                google_api_key=CONFIG.google_api_key,
+                top_p=model_config.get("top_p", 0.9),
+            )
+            logger.info(f"Backend Generator initialized with {model_config['model']} (Gemini 1.5 Pro)")
+        except Exception as e:
+            logger.error(f"Failed to initialize Backend Generator: {e}")
+            raise
     
     def _extract_json(self, content: str) -> str:
         """Extract and clean JSON from response with robust error handling"""
@@ -139,45 +148,66 @@ class BackendGenerator:
         project_name = requirements.get('project_name', 'backend')
         project_description = requirements.get('description', '')
         
-        system_prompt = f"""You are an expert {framework} backend developer generating production-ready APIs.
+        # Check for regeneration instructions
+        regeneration_instructions = requirements.get("regeneration_instructions", [])
+        if regeneration_instructions:
+            logger.warning(f"Regeneration requested: {len(regeneration_instructions)} instructions")
+            # Add regeneration context to description
+            project_description = f"{project_description}\n\n{' '.join(regeneration_instructions)}"
+        
+        system_prompt = f"""You are an elite {framework} backend developer like Replit Agent 3, generating complete, production-ready APIs.
 
-CRITICAL REQUIREMENTS - MUST FOLLOW:
-1. Generate COMPLETE, WORKING backend code - NO placeholders, NO TODOs, NO incomplete code
-2. Include ALL necessary files: package.json, server files, routes, models, middleware, configs
+CRITICAL REQUIREMENTS - MUST FOLLOW (Like Replit Agent 3):
+1. Generate COMPLETE, WORKING backend code - NO placeholders, NO TODOs, NO incomplete code, NO "// TODO" comments
+2. Include ALL necessary files: package.json, server files, routes, models, middleware, configs, utilities
 3. Use modern best practices: proper error handling, validation, security
-4. Include database integration with {database}
-5. Include authentication/authorization if needed
+4. Include database integration with {database} - complete connection, models, queries
+5. Include authentication/authorization if needed - complete implementation
 6. Include API documentation and setup instructions
 7. Make it production-ready with proper environment configuration
 8. EVERY file must be COMPLETE and FUNCTIONAL - no partial implementations
+9. Generate ALL source code files - DO NOT skip any files needed for the API to run
+10. Think iteratively - generate files one by one, ensuring each is complete
 
-MANDATORY FILE REQUIREMENTS:
-- backend/package.json: MUST include all dependencies, scripts (start, dev, test)
-- backend/src/server.js or server.ts: MUST be complete server setup with Express/FastAPI
-- backend/src/routes/ or backend/src/api/: MUST include complete API routes with CRUD operations
-- backend/src/models/: MUST include database models for {database}
-- backend/src/middleware/: MUST include authentication, error handling, validation middleware
-- backend/src/config/: MUST include database connection, environment config
-- backend/src/utils/: MUST include helper functions, validators
-- backend/.env.example: MUST include all environment variables needed
+MANDATORY FILE REQUIREMENTS (Generate ALL of these):
+- backend/package.json: MUST include ALL dependencies with exact versions, scripts (start, dev, test)
+- backend/src/server.js or server.ts: MUST be complete server setup with Express/FastAPI, all middleware, error handling
+- backend/src/routes/ or backend/src/api/: MUST include ALL API routes with complete CRUD operations
+- backend/src/models/: MUST include ALL database models for {database} with complete schemas
+- backend/src/middleware/: MUST include authentication, error handling, validation, CORS, security middleware
+- backend/src/config/: MUST include database connection, environment config, all settings
+- backend/src/utils/: MUST include helper functions, validators, formatters
+- backend/src/controllers/: MUST include controllers if using MVC pattern
+- backend/.env.example: MUST include ALL environment variables needed
 - backend/.gitignore: MUST include proper gitignore
-- backend/README.md: MUST include setup instructions and API documentation
+- backend/README.md: MUST include complete setup instructions and API documentation
 
 Output format (ONLY valid JSON, no markdown):
 {{
-  "backend/package.json": "complete package.json with all dependencies",
-  "backend/src/server.js": "complete server setup",
-  "backend/src/routes/...": "all route files",
-  "backend/src/models/...": "all model files",
-  "backend/src/middleware/...": "all middleware files",
-  "backend/.env.example": "environment variables template",
+  "backend/package.json": "complete package.json with ALL dependencies",
+  "backend/src/server.js": "complete server setup with ALL middleware",
+  "backend/src/routes/index.js": "complete routes file",
+  "backend/src/routes/api.js": "complete API routes",
+  "backend/src/models/...": "ALL model files",
+  "backend/src/middleware/auth.js": "complete auth middleware",
+  "backend/src/middleware/error.js": "complete error middleware",
+  "backend/src/config/database.js": "complete database config",
+  "backend/.env.example": "environment variables",
   "backend/README.md": "setup and API documentation"
 }}
 
 CRITICAL: 
 - Output ONLY the JSON object. No explanations, no markdown code blocks.
-- Generate MINIMUM 8-10 files for a complete backend
-- Each file must be FULLY IMPLEMENTED with no placeholders"""
+- Generate MINIMUM 12-15 files for a complete backend
+- Each file must be FULLY IMPLEMENTED with no placeholders
+- DO NOT generate only Dockerfiles - generate ALL source code files
+- Think like Replit Agent 3 - be thorough, iterative, and complete"""
+        
+        # Check for regeneration instructions
+        regeneration_instructions = requirements.get("regeneration_instructions", [])
+        regen_context = ""
+        if regeneration_instructions:
+            regen_context = "\n\n⚠️ REGENERATION REQUEST:\n" + "\n".join(regeneration_instructions) + "\n\nYou MUST generate MORE files this time. Previous attempt was insufficient."
         
         user_prompt = f"""Generate a COMPLETE, PRODUCTION-READY {framework} backend API based on these requirements:
 
@@ -187,32 +217,41 @@ PROJECT REQUIREMENTS:
 FRAMEWORK: {framework}
 DATABASE: {database}
 FEATURES: {features_str}
+{regen_context}
 
-REQUIRED FILES TO GENERATE:
-1. backend/package.json - Complete with all dependencies, scripts (start, dev, test)
-2. backend/src/server.js or server.ts - Main server file with Express/FastAPI setup
-3. backend/src/routes/ or backend/src/api/ - Complete API routes with CRUD operations
-4. backend/src/models/ - Database models for {database}
-5. backend/src/middleware/ - Authentication, error handling, validation middleware
-6. backend/src/config/ - Database connection, environment config
-7. backend/src/utils/ - Helper functions, validators
-8. backend/.env.example - All environment variables needed
-9. backend/.gitignore - Proper gitignore
-10. backend/README.md - Setup instructions and API documentation
+CRITICAL: You are generating a COMPLETE, WORKING backend API. Think like Replit Agent 3:
+1. Generate ALL source code files needed
+2. Each file must be COMPLETE and FUNCTIONAL
+3. The API must RUN when user executes: npm install && npm start
+4. NO placeholders, NO TODOs, NO incomplete code
+
+MANDATORY FILES TO GENERATE (Generate ALL of these):
+1. backend/package.json - Complete with ALL dependencies, exact versions, scripts (start, dev, test)
+2. backend/src/server.js or server.ts - Main server file with Express/FastAPI setup, ALL middleware, error handling
+3. backend/src/routes/ or backend/src/api/ - ALL API routes with complete CRUD operations
+4. backend/src/models/ - ALL database models for {database} with complete schemas and methods
+5. backend/src/middleware/ - ALL middleware: authentication, error handling, validation, CORS, security
+6. backend/src/config/ - Database connection, environment config, all settings
+7. backend/src/utils/ - ALL helper functions, validators, formatters
+8. backend/src/controllers/ - Controllers if using MVC pattern
+9. backend/.env.example - ALL environment variables needed
+10. backend/.gitignore - Proper gitignore
+11. backend/README.md - Complete setup instructions and API documentation
 
 ADDITIONAL REQUIREMENTS:
-- Include proper error handling middleware
-- Include request validation and sanitization
-- Include CORS configuration if needed
-- Include rate limiting and security headers
-- Include database connection and models
-- Include API endpoints matching the project requirements
-- Include proper logging
+- Include proper error handling middleware - complete implementation
+- Include request validation and sanitization - complete validators
+- Include CORS configuration - complete setup
+- Include rate limiting and security headers - complete middleware
+- Include database connection and models - complete connection logic
+- Include API endpoints matching the project requirements - ALL endpoints implemented
+- Include proper logging - complete logging setup
 - Make it production-ready with environment-based configuration
 
 Project name: {project_name}
 
-Generate ALL files needed for a complete, runnable backend API. Output ONLY the JSON object with file paths as keys and complete file contents as values."""
+REMEMBER: Generate ALL source code files. DO NOT skip any files. The API must be COMPLETE and RUNNABLE.
+Output ONLY the JSON object with file paths as keys and complete file contents as values."""
         
         messages = [
             SystemMessage(content=system_prompt),
@@ -224,7 +263,38 @@ Generate ALL files needed for a complete, runnable backend API. Output ONLY the 
         for attempt in range(max_retries):
             try:
                 logger.info(f"Backend generation attempt {attempt + 1}/{max_retries}")
-                response = self.llm.invoke(messages)
+                logger.debug(f"Prompt length: {len(user_prompt)} chars, System prompt length: {len(system_prompt)} chars")
+                
+                # Try to invoke LLM with better error handling
+                try:
+                    response = self.llm.invoke(messages)
+                except Exception as api_error:
+                    error_msg = str(api_error)
+                    error_type = type(api_error).__name__
+                    logger.error(f"LLM API call failed on attempt {attempt + 1}: {error_type}: {error_msg}")
+                    
+                    # Check for specific error types
+                    if "429" in error_msg or "quota" in error_msg.lower() or "rate limit" in error_msg.lower():
+                        logger.error("API quota exceeded. Cannot retry - need to wait or use different API key.")
+                        raise  # Re-raise to be caught by outer exception handler
+                    elif "401" in error_msg or "unauthorized" in error_msg.lower():
+                        logger.error("API key invalid or unauthorized.")
+                        raise
+                    elif "timeout" in error_msg.lower():
+                        logger.warning("API timeout, will retry...")
+                        if attempt < max_retries - 1:
+                            import time
+                            time.sleep(5)  # Wait longer for timeout
+                            continue
+                        raise
+                    
+                    # For other errors, retry
+                    if attempt < max_retries - 1:
+                        import time
+                        time.sleep(2)
+                        continue
+                    raise
+                
                 content = getattr(response, "content", None)
                 if content is None:
                     content = str(response)
@@ -244,7 +314,7 @@ Generate ALL files needed for a complete, runnable backend API. Output ONLY the 
                     code_files = json.loads(content)
                     if isinstance(code_files, dict) and code_files:
                         file_count = len(code_files)
-                        logger.info(f"Gemini 2.5 Pro generated {file_count} backend files")
+                        logger.info(f"Gemini 1.5 Pro generated {file_count} backend files")
                         
                         # Validate minimum file count
                         if file_count < 5:
@@ -274,11 +344,23 @@ Generate ALL files needed for a complete, runnable backend API. Output ONLY the 
                     return {}
             
             except Exception as e:
-                logger.error(f"Error generating backend code on attempt {attempt + 1}: {e}")
+                error_msg = str(e)
+                error_type = type(e).__name__
+                logger.error(f"Error generating backend code on attempt {attempt + 1}: {error_type}: {error_msg}")
+                logger.error(f"Full traceback:")
                 traceback.print_exc()
+                
+                # If it's an API error, log more details
+                if "429" in error_msg or "quota" in error_msg.lower() or "rate limit" in error_msg.lower():
+                    logger.error("API quota/rate limit error detected. Consider using a different API key or waiting.")
+                
                 if attempt < max_retries - 1:
-                    logger.info("Retrying after error...")
+                    logger.info(f"Retrying after error (attempt {attempt + 2}/{max_retries})...")
+                    import time
+                    time.sleep(2)  # Brief delay before retry
                     continue
+                
+                logger.error(f"All {max_retries} attempts failed for backend generation")
                 return {}
         
         # If we get here, all retries failed
@@ -306,9 +388,27 @@ def backend_generator_node(state: Dict[str, Any]) -> Dict[str, Any]:
         if not isinstance(tech_stack, dict):
             tech_stack = {}
         
+        # Ensure backend tech stack is set
+        if "backend" not in tech_stack:
+            # Try to infer from requirements
+            project_type = requirements.get("project_type", "")
+            if "express" in str(requirements).lower() or "node" in str(requirements).lower():
+                tech_stack["backend"] = {"framework": "nodejs-express"}
+            elif "fastapi" in str(requirements).lower():
+                tech_stack["backend"] = {"framework": "fastapi"}
+            else:
+                tech_stack["backend"] = {"framework": "nodejs-express"}  # Default
+        
+        # Ensure database is set
+        if "database" not in tech_stack:
+            tech_stack["database"] = {"primary": "mongodb"}  # Default
+        
         architecture = state.get("architecture", {})
         if not isinstance(architecture, dict):
             architecture = {}
+        
+        logger.info(f"Backend generator: requirements={bool(requirements)}, tech_stack={bool(tech_stack)}")
+        logger.info(f"User input: {state.get('user_input', '')[:100]}")
         
         code_files = generator.generate_code(
             requirements,
@@ -319,13 +419,16 @@ def backend_generator_node(state: Dict[str, Any]) -> Dict[str, Any]:
         generated_code = state.get("generated_code", {})
         if code_files and isinstance(code_files, dict) and not code_files.get("error"):
             generated_code.update(code_files)
+            logger.info(f"✓ Backend: Added {len(code_files)} files, total: {len(generated_code)}")
+        else:
+            logger.warning(f"✗ Backend: No files generated or error occurred")
         
         return {
             "generated_code": generated_code,
             "logs": [
                 {
                     "phase": "backend_generation",
-                    "message": f"Generated {len(code_files)} backend files using Gemini 2.5 Pro",
+                    "message": f"Generated {len(code_files) if code_files else 0} backend files using Gemini 1.5 Pro",
                     "timestamp": state.get("timestamp"),
                 }
             ],

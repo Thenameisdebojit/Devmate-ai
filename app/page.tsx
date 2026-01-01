@@ -87,7 +87,13 @@ export default function Home() {
     if (!isAuthenticated || messages.length === 0) return
 
     try {
-      const firstUserMessage = messages.find((m) => m.type === 'user')
+      // Filter out messages with empty content to avoid validation errors
+      const validMessages = messages.filter((m) => m.content && m.content.trim().length > 0)
+      
+      // Don't save if there are no valid messages
+      if (validMessages.length === 0) return
+
+      const firstUserMessage = validMessages.find((m) => m.type === 'user')
       const title = firstUserMessage?.content.substring(0, 50) || 'New Chat'
 
       const endpoint = currentChatId ? `/api/chats/${currentChatId}` : '/api/chats'
@@ -96,7 +102,7 @@ export default function Home() {
       const response = await fetch(endpoint, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, messages }),
+        body: JSON.stringify({ title, messages: validMessages, domain: currentDomain }),
       })
 
       if (response.ok) {
@@ -125,6 +131,10 @@ export default function Home() {
         const data = await response.json()
         setMessages(data.chat.messages)
         setCurrentChatId(chatId)
+        // Restore the domain from the chat
+        if (data.chat.domain) {
+          setDomain(data.chat.domain)
+        }
       }
     } catch (error) {
       console.error('Failed to load chat:', error)
@@ -227,11 +237,14 @@ export default function Home() {
             )}
           </div>
 
-          <div className="sticky bottom-0 z-30 border-t border-gray-200 dark:border-gray-800 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm">
-            <div className="max-w-4xl mx-auto px-4 py-4">
-              <InputSection onNewChat={handleNewChat} />
+          {/* Only show input bar for General and Academic domains, not App Generator */}
+          {currentDomain !== 'app-generator' && (
+            <div className="sticky bottom-0 z-30 border-t border-gray-200 dark:border-gray-800 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm">
+              <div className="max-w-4xl mx-auto px-4 py-4">
+                <InputSection onNewChat={handleNewChat} />
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
     </>

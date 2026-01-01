@@ -1,0 +1,15 @@
+{
+  "project_id": "proj-c040aeab",
+  "step_name": "human_approval",
+  "timestamp": "2025-12-31T22:06:25.712442",
+  "state": {
+    "approval_results": [],
+    "logs": [
+      {
+        "phase": "human_approval",
+        "message": "Human approval disabled",
+        "timestamp": "2025-12-31T22:06:10.893179"
+      }
+    ]
+  }
+}

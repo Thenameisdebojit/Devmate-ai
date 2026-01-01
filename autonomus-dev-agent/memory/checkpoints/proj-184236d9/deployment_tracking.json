@@ -1,0 +1,18 @@
+{
+  "project_id": "proj-184236d9",
+  "step_name": "deployment_tracking",
+  "timestamp": "2025-12-31T21:31:54.004903",
+  "state": {
+    "deployment_status": "failed",
+    "logs": [
+      {
+        "phase": "deployment",
+        "message": "Deployment tracking failed: 'str' object has no attribute 'get'",
+        "timestamp": "2025-12-31T21:28:34.350004"
+      }
+    ],
+    "errors": [
+      "'str' object has no attribute 'get'"
+    ]
+  }
+}

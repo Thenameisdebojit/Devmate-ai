@@ -1,0 +1,47 @@
+{
+  "project_id": "proj-478ff273",
+  "step_name": "workflow_optimization",
+  "timestamp": "2025-12-31T22:38:23.970879",
+  "state": {
+    "config": {
+      "enable_testing": true,
+      "enable_security_scan": true,
+      "enable_performance_profiling": false,
+      "enable_auto_refactor": true,
+      "enable_performance_optimization": false,
+      "enable_dependency_optimization": false,
+      "enable_human_approval": false,
+      "auto_approve": true,
+      "collect_feedback": false,
+      "interactive_feedback": false,
+      "enable_interventions": false,
+      "allow_requirement_modification": false,
+      "enable_templates": true,
+      "save_as_template": false,
+      "enable_git": true,
+      "create_github_repo": false,
+      "enable_deployment": true,
+      "auto_deploy": false,
+      "deployment_platform": "vercel",
+      "max_retries": 2,
+      "timeout_seconds": 300,
+      "optimization_level": "simple",
+      "skip_testing": true,
+      "skip_performance_profiling": true,
+      "skip_security_scan": true,
+      "skip_optimization": true,
+      "skip_project_management": true,
+      "skip_dependency_optimization": true,
+      "skip_template_library": true,
+      "skip_version_control": true,
+      "skip_deployment_tracking": true
+    },
+    "logs": [
+      {
+        "phase": "workflow_optimization",
+        "message": "Task complexity: simple. Skipping unnecessary phases for faster generation.",
+        "timestamp": "2025-12-31T22:38:11.928898"
+      }
+    ]
+  }
+}

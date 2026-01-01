@@ -21,6 +21,9 @@ def generate_project_api(prompt: str):
     Returns:
         dict with project files and metadata
     """
+    import sys
+    import time
+    
     project_files = {}
     project_id = None
     framework = "Unknown"
@@ -30,13 +33,42 @@ def generate_project_api(prompt: str):
     # Track generation steps
     steps = []
     current_step = 0
+    start_time = time.time()
+    max_duration = 600  # 10 minutes max (increased for complex tasks and industrial-grade performance)
     
     try:
         # Track project_id from metrics in finalization event
         last_project_dir = None
+        event_count = 0
+        
+        # Print progress to stderr so it doesn't interfere with JSON output
+        print("Starting project generation...", file=sys.stderr)
+        
         for event in orchestrator.generate_project(prompt, debug_mode=False):
+            # Check timeout
+            elapsed = time.time() - start_time
+            if elapsed > max_duration:
+                print(f"ERROR: Generation timeout after {max_duration} seconds. Last node: {last_node if 'last_node' in locals() else 'unknown'}", file=sys.stderr)
+                sys.stderr.flush()
+                raise Exception(f"Generation timeout after {max_duration} seconds. Last node: {last_node if 'last_node' in locals() else 'unknown'}")
+            
+            event_count += 1
             node = event.get("node", "")
             status = event.get("status", "")
+            last_node = node
+            
+            # Print progress to stderr
+            if event_count % 5 == 0:  # Print every 5 events to avoid spam
+                elapsed = time.time() - start_time
+                print(f"Progress: {node} - {status} ({event_count} events, {elapsed:.1f}s)", file=sys.stderr)
+                sys.stderr.flush()
+            
+            # Check for errors
+            if node == "error":
+                error_msg = event.get("error", "Unknown error")
+                print(f"ERROR: {error_msg}", file=sys.stderr)
+                sys.stderr.flush()
+                raise Exception(f"Generation error: {error_msg}")
             
             # Track progress
             if node and node != "error" and node != "cancellation":
@@ -66,6 +98,8 @@ def generate_project_api(prompt: str):
             if node == "error":
                 error_msg = event.get("error", "Unknown error")
                 raise Exception(f"Generation error: {error_msg}")
+        
+        print(f"Generation completed: {event_count} events processed", file=sys.stderr)
         
         # Get files from artifacts directory (most reliable way)
         script_dir = Path(__file__).parent
@@ -129,10 +163,20 @@ def generate_project_api(prompt: str):
         
         # Check if we have any files
         if not project_files:
+            print("WARNING: No files found in artifacts directory", file=sys.stderr)
+            print(f"Artifacts dir: {artifacts_dir}", file=sys.stderr)
+            if artifacts_dir.exists():
+                print(f"Artifacts dir contents: {list(artifacts_dir.iterdir())}", file=sys.stderr)
             return {
                 "success": False,
                 "error": "No files were generated. The project may have failed during generation. Check the logs for more details.",
-                "steps": steps
+                "steps": steps,
+                "debug_info": {
+                    "artifacts_dir": str(artifacts_dir),
+                    "artifacts_exists": artifacts_dir.exists(),
+                    "project_id": project_id,
+                    "last_project_dir": str(last_project_dir) if last_project_dir else None
+                }
             }
         
         # Generate setup instructions

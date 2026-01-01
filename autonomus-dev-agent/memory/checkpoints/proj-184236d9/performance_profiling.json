@@ -1,0 +1,15 @@
+{
+  "project_id": "proj-184236d9",
+  "step_name": "performance_profiling",
+  "timestamp": "2025-12-31T21:31:46.016043",
+  "state": {
+    "performance_tests": {},
+    "logs": [
+      {
+        "phase": "performance_profiling",
+        "message": "Skipped performance profiling - no code generated",
+        "timestamp": "2025-12-31T21:28:34.350004"
+      }
+    ]
+  }
+}

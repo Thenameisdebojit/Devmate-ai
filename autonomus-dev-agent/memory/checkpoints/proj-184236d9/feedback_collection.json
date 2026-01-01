@@ -1,0 +1,15 @@
+{
+  "project_id": "proj-184236d9",
+  "step_name": "feedback_collection",
+  "timestamp": "2025-12-31T21:31:54.007451",
+  "state": {
+    "user_feedback": null,
+    "logs": [
+      {
+        "phase": "feedback_collection",
+        "message": "Feedback collection disabled",
+        "timestamp": "2025-12-31T21:28:34.350004"
+      }
+    ]
+  }
+}

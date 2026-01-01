@@ -20,10 +20,10 @@ class Config:
     vercel_token: str = os.getenv("VERCEL_TOKEN", "")
     netlify_token: str = os.getenv("NETLIFY_TOKEN", "")
     
-    # Model Settings - Updated to Gemini 2.5
-    default_model: str = "gemini-2.5-flash"
-    thinking_model: str = "gemini-2.5-pro"
-    fast_model: str = "gemini-2.5-flash"
+    # Model Settings - Updated to Gemini 1.5 (2.5 may not be available)
+    default_model: str = "gemini-1.5-flash"
+    thinking_model: str = "gemini-1.5-pro"
+    fast_model: str = "gemini-1.5-flash"
     
     # Generation Settings
     max_tokens: int = 8192
@@ -68,8 +68,10 @@ class Config:
     
     def __post_init__(self):
         """Validate configuration"""
+        # Don't raise error here - let agents handle it gracefully
         if not self.google_api_key:
-            raise ValueError("GOOGLE_API_KEY environment variable not set")
+            import warnings
+            warnings.warn("GOOGLE_API_KEY environment variable not set. Code generation will fail without it.")
 
 
 class FrameworkConfig:
@@ -77,43 +79,43 @@ class FrameworkConfig:
     
     model_configs: Dict[str, Dict[str, Any]] = {
         "planning": {
-            "model": "gemini-2.5-flash",  # Updated to Gemini 2.5
+            "model": "gemini-1.5-flash",  # Use stable Gemini 1.5 Flash
             "temperature": 0.5,
             "max_tokens": 8192,
             "top_p": 0.85,
         },
         "code": {
-            "model": "gemini-2.5-pro",  # Use Pro for code generation for better quality
+            "model": "gemini-1.5-pro",  # Use Gemini 1.5 Pro for code generation (langchain adds models/ prefix)
             "temperature": 0.7,
             "max_tokens": 16384,  # Increased for complete code generation
             "top_p": 0.9,
         },
         "validation": {
-            "model": "gemini-2.5-flash",  # Flash is sufficient for validation
+            "model": "gemini-1.5-flash",  # Flash is sufficient for validation
             "temperature": 0.3,
             "max_tokens": 8192,
             "top_p": 0.85,
         },
         "validation_fallback": {
-            "model": "gemini-2.5-flash",
+            "model": "gemini-1.5-flash",
             "temperature": 0.3,
             "max_tokens": 8192,
             "top_p": 0.85,
         },
         "testing": {
-            "model": "gemini-2.5-flash",
+            "model": "gemini-1.5-flash",
             "temperature": 0.3,
             "max_tokens": 8192,
             "top_p": 0.85,
         },
         "security": {
-            "model": "gemini-2.5-flash",
+            "model": "gemini-1.5-flash",
             "temperature": 0.2,
             "max_tokens": 4096,
             "top_p": 0.8,
         },
         "refactor": {
-            "model": "gemini-2.5-pro",  # Use Pro for refactoring
+            "model": "gemini-1.5-pro",  # Use Pro for refactoring
             "temperature": 0.2,
             "max_tokens": 16384,
             "top_p": 0.85,

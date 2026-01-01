@@ -61,46 +61,65 @@ export async function POST(req: NextRequest) {
             // Try python3 first, fallback to python
             const pythonCommand = process.platform === 'win32' ? 'python' : 'python3'
 
-            sendStep({
-              step: 1,
-              total: 6,
-              message: 'Checking Python dependencies...',
-              status: 'in_progress'
-            })
-
             // Check if we're in a serverless environment (Vercel) where Python subprocess won't work
-            const isServerless = process.env.VERCEL === '1' || process.env.AWS_LAMBDA_FUNCTION_NAME || !process.env.PATH?.includes('python')
-            
-            if (!isServerless) {
-              // Check if Python dependencies are installed (only in non-serverless environments)
-              const checkDepsProcess = spawn(pythonCommand, ['-c', 'import langchain_google_genai; import langgraph; import langchain'], {
-                cwd: agentDir,
-                env: { ...process.env, PYTHONPATH: agentDir }
-              })
+            // More robust detection: check for Vercel, AWS Lambda, or if Python is not available
+            const isVercel = process.env.VERCEL === '1' || process.env.VERCEL_ENV || process.env.VERCEL_URL
+            const isAWS = process.env.AWS_LAMBDA_FUNCTION_NAME
+            const isServerless = isVercel || isAWS
 
-              let depsCheckError = ''
-              checkDepsProcess.stderr.on('data', (data) => {
-                depsCheckError += data.toString()
-              })
-
-              await new Promise<void>((resolve, reject) => {
-                checkDepsProcess.on('close', (code) => {
-                  if (code !== 0) {
-                    // Fallback to direct AI generation if Python deps not available
-                    logger.warn('Python dependencies not available, using direct AI generation')
-                    resolve() // Continue with fallback
-                  } else {
-                    resolve()
-                  }
-                })
-                checkDepsProcess.on('error', (error) => {
-                  // Fallback to direct AI generation
-                  logger.warn(`Python check failed: ${error.message}, using direct AI generation`)
-                  resolve() // Continue with fallback
-                })
+            if (isServerless) {
+              sendStep({
+                step: 1,
+                total: 6,
+                message: 'Serverless environment detected, using direct AI generation...',
+                status: 'completed'
               })
             } else {
-              logger.info('Serverless environment detected, using direct AI generation')
+              sendStep({
+                step: 1,
+                total: 6,
+                message: 'Checking Python dependencies...',
+                status: 'in_progress'
+              })
+            }
+            
+            if (isServerless) {
+              logger.info('Serverless environment detected (Vercel/AWS), using direct AI generation')
+              // Skip Python entirely on serverless
+            } else {
+              // Only try Python in non-serverless environments
+              try {
+                // Check if Python dependencies are installed (only in non-serverless environments)
+                const checkDepsProcess = spawn(pythonCommand, ['-c', 'import langchain_google_genai; import langgraph; import langchain'], {
+                  cwd: agentDir,
+                  env: { ...process.env, PYTHONPATH: agentDir }
+                })
+
+                let depsCheckError = ''
+                checkDepsProcess.stderr.on('data', (data) => {
+                  depsCheckError += data.toString()
+                })
+
+                await new Promise<void>((resolve, reject) => {
+                  checkDepsProcess.on('close', (code) => {
+                    if (code !== 0) {
+                      // Fallback to direct AI generation if Python deps not available
+                      logger.warn('Python dependencies not available, using direct AI generation')
+                      resolve() // Continue with fallback
+                    } else {
+                      resolve()
+                    }
+                  })
+                  checkDepsProcess.on('error', (error) => {
+                    // Fallback to direct AI generation
+                    logger.warn(`Python check failed: ${error.message}, using direct AI generation`)
+                    resolve() // Continue with fallback
+                  })
+                })
+              } catch (error: any) {
+                // If spawn fails (e.g., Python not found), skip to direct generation
+                logger.warn(`Python check error: ${error.message}, using direct AI generation`)
+              }
             }
 
             sendStep({
@@ -113,14 +132,17 @@ export async function POST(req: NextRequest) {
             sendStep({
               step: 2,
               total: 6,
-              message: 'Generating complete application...',
+              message: 'Generating application with AI...',
               status: 'in_progress'
             })
 
             let projectData: any
+            // Only use Python agent if not in serverless environment
             let usePythonAgent = !isServerless
+            const pythonStartTime = Date.now()
+            const PYTHON_TIMEOUT = 10 * 60 * 1000 // 10 minutes timeout for Python agent (increased for complex tasks)
 
-            if (usePythonAgent) {
+            if (usePythonAgent && !isServerless) {
               // Try to use Python agent
               try {
                 // Run Python script from the agent directory so relative imports work
@@ -135,21 +157,58 @@ export async function POST(req: NextRequest) {
 
                 let stdout = ''
                 let stderr = ''
+                let hasOutput = false
 
                 pythonProcess.stdout.on('data', (data) => {
-                  stdout += data.toString()
+                  const text = data.toString()
+                  stdout += text
+                  hasOutput = true
+                  
+                  // Try to parse partial JSON if we see it
+                  if (text.includes('{') && text.includes('"success"')) {
+                    try {
+                      const jsonMatch = stdout.match(/\{[\s\S]*"success"[\s\S]*\}/)
+                      if (jsonMatch) {
+                        const partial = JSON.parse(jsonMatch[0])
+                        if (partial.success === false) {
+                          // If we see an error, fail fast
+                          logger.warn('Python agent returned error, switching to direct generation')
+                          usePythonAgent = false
+                          pythonProcess.kill()
+                        }
+                      }
+                    } catch (e) {
+                      // Ignore parse errors for partial JSON
+                    }
+                  }
                 })
 
                 pythonProcess.stderr.on('data', (data) => {
                   stderr += data.toString()
+                  logger.warn(`Python stderr: ${data.toString()}`)
                 })
+
+                // Add timeout - 2 minutes max for Python agent (then fallback to direct)
+                const timeout = setTimeout(() => {
+                  if (!projectData) {
+                    logger.warn('Python agent timeout after 2 minutes, switching to direct generation')
+                    pythonProcess.kill('SIGTERM')
+                    usePythonAgent = false
+                  }
+                }, PYTHON_TIMEOUT)
 
                 await new Promise<void>((resolve, reject) => {
                   pythonProcess.on('close', (code) => {
-                    if (code !== 0) {
+                    clearTimeout(timeout)
+                    
+                    if (code !== 0 && !projectData) {
                       // Fallback to direct generation
-                      console.warn(`Python agent failed (code ${code}), using direct AI generation`)
+                      logger.warn(`Python agent failed (code ${code}), using direct AI generation`)
+                      logger.warn(`Python stderr: ${stderr.substring(0, 500)}`)
                       usePythonAgent = false
+                      resolve()
+                    } else if (projectData && projectData.success) {
+                      // Already got data, resolve
                       resolve()
                     } else {
                       // Parse Python output
@@ -166,29 +225,69 @@ export async function POST(req: NextRequest) {
                           throw new Error('No JSON found in Python output')
                         }
                       } catch (parseError: any) {
-                        console.warn(`Failed to parse Python output: ${parseError.message}, using direct AI generation`)
+                        logger.warn(`Failed to parse Python output: ${parseError.message}, using direct AI generation`)
+                        logger.warn(`Python stdout (last 500 chars): ${stdout.substring(Math.max(0, stdout.length - 500))}`)
                         usePythonAgent = false
                         resolve()
                       }
                     }
                   })
                   pythonProcess.on('error', (error) => {
-                    console.warn(`Python process error: ${error.message}, using direct AI generation`)
+                    clearTimeout(timeout)
+                    logger.warn(`Python process error: ${error.message}, using direct AI generation`)
                     usePythonAgent = false
                     resolve()
                   })
                 })
               } catch (error: any) {
-                console.warn(`Python agent error: ${error.message}, using direct AI generation`)
+                logger.warn(`Python agent error: ${error.message}, using direct AI generation`)
                 usePythonAgent = false
               }
             }
 
             // Fallback to direct AI generation if Python agent not available or failed
             if (!usePythonAgent || !projectData) {
-              const { generateAppDirect } = await import('@/lib/appGenerator')
-              projectData = await generateAppDirect(prompt)
-              projectData.success = true
+              const elapsed = Date.now() - pythonStartTime
+              if (elapsed < PYTHON_TIMEOUT) {
+                // Python failed quickly, update message
+                sendStep({
+                  step: 2,
+                  total: 6,
+                  message: 'Python agent unavailable, using direct AI generation...',
+                  status: 'in_progress'
+                })
+              } else {
+                // Python timed out, already showing correct message
+                sendStep({
+                  step: 2,
+                  total: 6,
+                  message: 'Python agent timed out, using direct AI generation...',
+                  status: 'in_progress'
+                })
+              }
+              
+              try {
+                const { generateAppDirect } = await import('@/lib/appGenerator')
+                logger.info('Starting direct AI generation...')
+                const directProject = await generateAppDirect(prompt)
+                logger.info(`Direct generation completed: ${directProject.files?.length || 0} files`)
+                
+                // Convert to expected format
+                projectData = {
+                  success: true,
+                  projectName: directProject.projectName,
+                  framework: directProject.framework,
+                  description: directProject.description,
+                  files: directProject.files.map((f: any) => ({
+                    path: f.path,
+                    content: f.content
+                  })),
+                  setupInstructions: directProject.setupInstructions
+                }
+              } catch (directError: any) {
+                logger.error('Direct generation error:', directError)
+                throw new Error(`Failed to generate application: ${directError.message || 'Unknown error'}`)
+              }
             }
 
             sendStep({

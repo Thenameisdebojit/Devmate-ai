@@ -175,8 +175,37 @@ Be thorough, intelligent, and infer reasonable professional defaults when inform
             # Parse JSON
             requirements = json.loads(content)
             
+            # Ensure tech_stack is properly structured
+            if "tech_stack" not in requirements:
+                requirements["tech_stack"] = {}
+            
+            # For web apps, ensure frontend is set
+            project_type = requirements.get("project_type", "").lower()
+            user_prompt_lower = user_prompt.lower()
+            
+            if "web" in project_type or "website" in user_prompt_lower or "webapp" in user_prompt_lower:
+                if "frontend" not in requirements["tech_stack"]:
+                    # Infer from prompt
+                    if "next" in user_prompt_lower or "nextjs" in user_prompt_lower:
+                        requirements["tech_stack"]["frontend"] = {"framework": "nextjs"}
+                    elif "react" in user_prompt_lower:
+                        requirements["tech_stack"]["frontend"] = {"framework": "react"}
+                    else:
+                        requirements["tech_stack"]["frontend"] = {"framework": "react"}  # Default
+            
+            # For full-stack or if backend mentioned, ensure backend is set
+            if "full-stack" in project_type or "backend" in user_prompt_lower or "api" in user_prompt_lower:
+                if "backend" not in requirements["tech_stack"]:
+                    if "express" in user_prompt_lower or "node" in user_prompt_lower:
+                        requirements["tech_stack"]["backend"] = {"framework": "nodejs-express"}
+                    elif "fastapi" in user_prompt_lower:
+                        requirements["tech_stack"]["backend"] = {"framework": "fastapi"}
+                    else:
+                        requirements["tech_stack"]["backend"] = {"framework": "nodejs-express"}  # Default
+            
             logger.info(f"Successfully analyzed requirements for: {requirements.get('project_name', 'unnamed project')}")
             logger.info(f"Detected {len(requirements.get('features', []))} features")
+            logger.info(f"Tech stack: frontend={requirements.get('tech_stack', {}).get('frontend')}, backend={requirements.get('tech_stack', {}).get('backend')}")
             return requirements
             
         except json.JSONDecodeError as e:

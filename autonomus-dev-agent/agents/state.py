@@ -32,6 +32,9 @@ class AgentState(TypedDict):
     
     # Phase 2: Code Generation - FIXED to handle concurrent updates
     generated_code: Annotated[Dict[str, str], merge_dicts]
+    code_completeness: Dict[str, Any]
+    needs_regeneration: bool
+    regeneration_count: int
     
     # Phase 3: Validation & Deployment
     validation_report: Dict[str, Any]
@@ -139,6 +142,9 @@ def create_initial_state(
         
         # Phase 2
         generated_code={},
+        code_completeness={},
+        needs_regeneration=False,
+        regeneration_count=0,
         
         # Phase 3
         validation_report={},

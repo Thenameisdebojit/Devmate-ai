@@ -19,7 +19,7 @@ export async function GET() {
     const chats = await Chat.find({ userId: currentUser.userId })
       .sort({ updatedAt: -1 })
       .limit(50)
-      .select('title createdAt updatedAt')
+      .select('title domain createdAt updatedAt')
 
     return NextResponse.json({ chats })
   } catch (error: any) {
@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    const { title, messages } = await req.json()
+    const { title, messages, domain } = await req.json()
 
     if (!title || !messages) {
       return NextResponse.json(
@@ -57,6 +57,7 @@ export async function POST(req: NextRequest) {
       userId: currentUser.userId,
       title,
       messages,
+      domain: domain || 'general',
     })
 
     return NextResponse.json({ chat }, { status: 201 })

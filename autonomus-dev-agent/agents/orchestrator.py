@@ -3,13 +3,15 @@ Deep Agent Orchestrator - Complete Phase 4 Production Integration
 Coordinates all agents using LangGraph workflow with full Phase 4 capabilities.
 """
 
-from typing import Dict, Any, Iterator, Optional  # ← ADD Optional HERE
+from typing import Dict, Any, Iterator, Optional
 from langgraph.graph import StateGraph, END
 from agents.state import AgentState, create_initial_state
+import uuid
 
 # Phase 1: Requirements & Planning
 from agents.requirement_analyzer import requirement_analyzer_node
 from agents.strategic_planner import strategic_planner_node
+from agents.workflow_optimizer import workflow_optimizer_node
 
 # Phase 2: Code Generation
 from agents.code_generators import (
@@ -20,6 +22,7 @@ from agents.code_generators import (
 
 # Phase 3: Validation & Deployment
 from agents.validators.code_validator import code_validator_node
+from agents.validators.code_completeness_validator import code_completeness_validator_node
 from agents.deployment.devops_agent import devops_agent_node
 from agents.artifact_writer import artifact_writer_node
 
@@ -78,6 +81,7 @@ class DeepAgentOrchestrator:
         
         # Phase 1: Requirements & Planning
         workflow.add_node("requirement_analysis", requirement_analyzer_node)
+        workflow.add_node("workflow_optimization", workflow_optimizer_node)
         workflow.add_node("strategic_planning", strategic_planner_node)
         workflow.add_node("human_approval", approval_agent_node)  # NEW
         
@@ -87,6 +91,7 @@ class DeepAgentOrchestrator:
         workflow.add_node("mobile_generation", mobile_generator_node)
         
         # Phase 3: Validation & Deployment
+        workflow.add_node("code_completeness_check", code_completeness_validator_node)
         workflow.add_node("code_validation", code_validator_node)
         workflow.add_node("deployment_config", devops_agent_node)
         
@@ -119,7 +124,8 @@ class DeepAgentOrchestrator:
         workflow.set_entry_point("requirement_analysis")
         
         # Phase 1 flow
-        workflow.add_edge("requirement_analysis", "human_approval")
+        workflow.add_edge("requirement_analysis", "workflow_optimization")
+        workflow.add_edge("workflow_optimization", "human_approval")
         
         # Conditional: Continue or cancel after approval
         workflow.add_conditional_edges(
@@ -139,47 +145,68 @@ class DeepAgentOrchestrator:
         workflow.add_edge("intervention_check", "mobile_generation")
         
         # Wait for all generators to complete before validation
-        workflow.add_edge("frontend_generation", "code_validation")
-        workflow.add_edge("backend_generation", "code_validation")
-        workflow.add_edge("mobile_generation", "code_validation")
+        workflow.add_edge("frontend_generation", "code_completeness_check")
+        workflow.add_edge("backend_generation", "code_completeness_check")
+        workflow.add_edge("mobile_generation", "code_completeness_check")
+        
+        # Conditional: Check if code is complete, if not, regenerate with enhanced prompts
+        workflow.add_conditional_edges(
+            "code_completeness_check",
+            self._check_code_completeness,
+            {
+                "complete": "code_validation",
+                "incomplete": "frontend_generation"  # Loop back to regenerate with better context
+            }
+        )
         
         # Phase 3 flow
         workflow.add_edge("code_validation", "deployment_config")
         
+        # Conditional: Skip testing/optimization for simple tasks, go straight to finalization
+        workflow.add_conditional_edges(
+            "deployment_config",
+            self._should_skip_phases,
+            {
+                "skip_all": "finalization",  # Simple tasks: skip everything, go straight to finalization
+                "test_only": "test_generation",  # Medium tasks: test but skip optimization
+                "full": "test_generation"  # Complex tasks: full pipeline
+            }
+        )
+        
         # Phase 4: Testing Pipeline (Sequential)
-        workflow.add_edge("deployment_config", "test_generation")
         workflow.add_edge("test_generation", "integration_test_generation")
         workflow.add_edge("integration_test_generation", "performance_profiling")
         workflow.add_edge("performance_profiling", "security_scan")
         
+        # After security scan, decide on optimization
+        workflow.add_conditional_edges(
+            "security_scan",
+            self._should_skip_optimization,
+            {
+                "skip": "finalization",
+                "optimize": "error_analysis"
+            }
+        )
+        
         # Phase 4: Optimization Pipeline
-        workflow.add_edge("security_scan", "error_analysis")
+        workflow.add_edge("error_analysis", "code_refactor")
         
         # Conditional: Refactor if errors found
         workflow.add_conditional_edges(
-            "error_analysis",
+            "code_refactor",
             self._should_refactor,
             {
-                "refactor": "code_refactor",
+                "refactor": "performance_optimization",
                 "skip_refactor": "performance_optimization"
             }
         )
         
-        workflow.add_edge("code_refactor", "performance_optimization")
         workflow.add_edge("performance_optimization", "dependency_optimization")
-        
-        # Phase 4: Project Management Pipeline
-        workflow.add_edge("dependency_optimization", "template_library")
-        workflow.add_edge("template_library", "version_control")
-        workflow.add_edge("version_control", "deployment_tracking")
-        
-        # Feedback & Finalization
-        workflow.add_edge("deployment_tracking", "feedback_collection")
-        workflow.add_edge("feedback_collection", "finalization")
+        workflow.add_edge("dependency_optimization", "finalization")
         workflow.add_edge("finalization", END)
         
         compiled_workflow = workflow.compile()
-        logger.info("Workflow graph compiled with 24 nodes (complete Phase 4)")
+        logger.info("Workflow graph compiled with 26 nodes (complete Phase 4 + code completeness validator + workflow optimizer)")
         
         return compiled_workflow
     
@@ -188,6 +215,53 @@ class DeepAgentOrchestrator:
         if state.get("generation_cancelled", False):
             return "cancelled"
         return "approved"
+    
+    def _check_code_completeness(self, state: AgentState) -> str:
+        """Check if generated code is complete enough"""
+        completeness = state.get("code_completeness", {})
+        needs_regeneration = state.get("needs_regeneration", False)
+        regeneration_count = state.get("regeneration_count", 0)
+        
+        # Prevent infinite loops - max 3 regeneration attempts
+        if needs_regeneration and regeneration_count < 3:
+            logger.warning(f"Code incomplete, regenerating (attempt {regeneration_count + 1}/3)")
+            logger.warning(f"Current: {completeness.get('source_files_count', 0)} source files, need: {completeness.get('required_minimum', 10)}")
+            
+            # Update state with incremented count
+            # Note: We can't modify state directly in conditional, but the completeness validator already updated requirements
+            return "incomplete"
+        
+        if needs_regeneration:
+            logger.error("Code still incomplete after 3 regeneration attempts, proceeding anyway")
+            logger.error(f"Final: {completeness.get('source_files_count', 0)} source files generated")
+        
+        return "complete"
+    
+    def _should_skip_phases(self, state: AgentState) -> str:
+        """Determine which phases to skip based on task complexity"""
+        config = state.get("config", {})
+        optimization = config.get("workflow_optimization", {})
+        optimization_level = optimization.get("optimization_level", "medium")
+        
+        if optimization_level == "simple":
+            logger.info("Simple task detected: Skipping testing, optimization, and project management phases")
+            return "skip_all"
+        elif optimization_level == "medium":
+            logger.info("Medium task detected: Running tests but skipping optimization")
+            return "test_only"
+        else:
+            logger.info("Complex task detected: Running full pipeline")
+            return "full"
+    
+    def _should_skip_optimization(self, state: AgentState) -> str:
+        """Determine if optimization should be skipped"""
+        config = state.get("config", {})
+        optimization = config.get("workflow_optimization", {})
+        
+        if optimization.get("skip_optimization", False):
+            logger.info("Skipping optimization phase for simple/medium task")
+            return "skip"
+        return "optimize"
     
     def _should_refactor(self, state: AgentState) -> str:
         """Determine if code refactoring is needed"""
@@ -292,11 +366,35 @@ class DeepAgentOrchestrator:
         
         # Stream workflow execution
         try:
+            # Track state as we go through the stream
+            current_state = initial_state.copy()
+            node_count = 0
+            max_nodes = 50  # Safety limit to prevent infinite loops
+            
+            # Use stream() which yields events as they happen
+            # stream() executes the workflow and yields state updates
             for event in self.workflow.stream(initial_state):
+                node_count += 1
+                
+                # Safety check to prevent infinite loops
+                if node_count > max_nodes:
+                    logger.error(f"Workflow exceeded {max_nodes} nodes, stopping to prevent infinite loop")
+                    yield {
+                        "node": "error",
+                        "status": "error",
+                        "error": f"Workflow exceeded maximum node count ({max_nodes}). This may indicate an infinite loop in the workflow.",
+                        "timestamp": datetime.now().isoformat()
+                    }
+                    break
+                
                 # Extract state updates
                 for node_name, node_output in event.items():
                     if node_name == END:
                         continue
+                    
+                    # Update current state with node output
+                    if isinstance(node_output, dict):
+                        current_state.update(node_output)
                     
                     # Yield progress update
                     yield {
@@ -307,14 +405,18 @@ class DeepAgentOrchestrator:
                     }
                     
                     # Save checkpoint
-                    self.checkpoint_manager.save_checkpoint(
-                        project_id,
-                        node_name,
-                        node_output
-                    )
+                    try:
+                        self.checkpoint_manager.save_checkpoint(
+                            project_id,
+                            node_name,
+                            node_output
+                        )
+                    except Exception as checkpoint_error:
+                        logger.warning(f"Checkpoint save failed: {checkpoint_error}")
             
-            # Final state
-            final_state = self.workflow.invoke(initial_state)
+            # Get final state - use the tracked state
+            final_state = current_state
+            logger.info(f"Workflow completed: {node_count} nodes processed")
             
             # Check if cancelled
             if final_state.get("generation_cancelled", False):

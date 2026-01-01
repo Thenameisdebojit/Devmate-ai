@@ -1,0 +1,21 @@
+{
+  "project_id": "proj-184236d9",
+  "step_name": "deployment_config",
+  "timestamp": "2025-12-31T21:31:40.448164",
+  "state": {
+    "docker_config": {
+      "frontend/Dockerfile": "FROM node:18-alpine\nWORKDIR /app\nCOPY package*.json ./\nRUN npm install\nCOPY . .\nRUN npm run build\nEXPOSE 3000\nCMD [\"npm\", \"start\"]",
+      "backend/Dockerfile": "FROM node:18-alpine\nWORKDIR /app\nCOPY package*.json ./\nRUN npm install\nCOPY . .\nEXPOSE 5000\nCMD [\"npm\", \"start\"]"
+    },
+    "k8s_manifests": {
+      "deployment.yaml": "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: Simple Scientific Calculator Website\nspec:\n  replicas: 2\n  selector:\n    matchLabels:\n      app: Simple Scientific Calculator Website\n  template:\n    metadata:\n      labels:\n        app: Simple Scientific Calculator Website\n    spec:\n      containers:\n      - name: app\n        image: Simple Scientific Calculator Website:latest\n        ports:\n        - containerPort: 3000"
+    },
+    "logs": [
+      {
+        "phase": "deployment_config",
+        "message": "Generated Docker and K8s configurations",
+        "timestamp": "2025-12-31T21:28:34.350004"
+      }
+    ]
+  }
+}
