@@ -1,6 +1,16 @@
 """
 API Wrapper for Autonomous Dev Agent
 Called from Next.js API routes to generate projects
+
+WORKSPACE-AWARE AGENT ARCHITECTURE:
+- This wrapper integrates with the workspace-aware agent foundation
+- Supports tool calls and checkpoint integration
+- Provides Python agent backend for the Agent Orchestrator abstraction
+
+TECH STACK ASSUMPTIONS:
+- Backend: Python agent with LangGraph workflow
+- Runtime: Container-per-project model (interface only, implementation deferred)
+- Integration: Works with Next.js Agent Orchestrator abstraction layer
 """
 
 import sys
@@ -14,12 +24,22 @@ sys.path.insert(0, str(Path(__file__).parent))
 from agents.orchestrator import orchestrator
 
 
-def generate_project_api(prompt: str):
+def generate_project_api(prompt: str, project_id: str = None, checkpoint_id: str = None):
     """
     Generate project and return structured data for API
     
+    WORKSPACE-AWARE INTEGRATION:
+    - This function integrates with the Next.js Agent Orchestrator abstraction
+    - Project ID and checkpoint ID can be provided from the workspace context
+    - Generated files are traceable through the workspace context manager
+    
+    Args:
+        prompt: User request for project generation
+        project_id: Optional workspace project ID (from WorkspaceContextManager)
+        checkpoint_id: Optional checkpoint ID (from AgentOrchestrator)
+    
     Returns:
-        dict with project files and metadata
+        dict with project files and metadata, including workspace metadata
     """
     import sys
     import time

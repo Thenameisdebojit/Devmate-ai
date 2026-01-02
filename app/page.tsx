@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, lazy, Suspense, useMemo } from 'react'
+import { useState, useEffect, lazy, Suspense, useMemo, useRef } from 'react'
 import ChatWindow from './components/ChatWindow'
 import InputSection from './components/InputSection'
 import Sidebar from './components/Sidebar'
@@ -30,6 +30,8 @@ export default function Home() {
   const [currentChatId, setCurrentChatId] = useState<string | null>(null)
   const [isSidebarOpen, setIsSidebarOpen] = useState(true)
   const [saveTimeout, setSaveTimeout] = useState<NodeJS.Timeout | null>(null)
+  const previousDomainRef = useRef<string | null>(null)
+  const isLoadingChatRef = useRef<boolean>(false)
 
   const { clearMessages, messages, setMessages, currentDomain, setDomain } = useChatStore()
   const { checkAuth, isAuthenticated, isLoading: authLoading } = useAuthStore()
@@ -83,6 +85,66 @@ export default function Home() {
     }
   }, [messages, isAuthenticated])
 
+  // Handle domain changes - start new chat session
+  useEffect(() => {
+    // Skip on initial mount
+    if (previousDomainRef.current === null) {
+      previousDomainRef.current = currentDomain
+      return
+    }
+
+    // Skip if we're loading a chat (domain change is programmatic, not user-initiated)
+    if (isLoadingChatRef.current) {
+      previousDomainRef.current = currentDomain
+      isLoadingChatRef.current = false
+      return
+    }
+
+    // If domain changed, start a new chat session
+    if (previousDomainRef.current !== currentDomain) {
+      const oldDomain = previousDomainRef.current
+      const handleDomainChange = async () => {
+        // Get current messages from store before clearing
+        const currentMessages = useChatStore.getState().messages
+        const chatIdToSave = currentChatId
+        
+        // Save current chat if there are messages (with the old domain)
+        if (isAuthenticated && currentMessages.length > 0) {
+          const validMessages = currentMessages.filter((m) => m.content && m.content.trim().length > 0)
+          if (validMessages.length > 0) {
+            // Save with the previous domain before clearing
+            const firstUserMessage = validMessages.find((m) => m.type === 'user')
+            const title = firstUserMessage?.content.substring(0, 50) || 'New Chat'
+
+            const endpoint = chatIdToSave ? `/api/chats/${chatIdToSave}` : '/api/chats'
+            const method = chatIdToSave ? 'PUT' : 'POST'
+
+            try {
+              await fetch(endpoint, {
+                method,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                  title, 
+                  messages: validMessages, 
+                  domain: oldDomain || 'general' 
+                }),
+              })
+            } catch (error) {
+              console.error('Failed to save chat on domain change:', error)
+            }
+          }
+        }
+        
+        // Clear messages and reset chat ID to start fresh session
+        clearMessages()
+        setCurrentChatId(null)
+      }
+
+      handleDomainChange()
+      previousDomainRef.current = currentDomain
+    }
+  }, [currentDomain, isAuthenticated, clearMessages, currentChatId])
+
   const saveCurrentChat = async () => {
     if (!isAuthenticated || messages.length === 0) return
 
@@ -126,12 +188,23 @@ export default function Home() {
 
   const handleLoadChat = async (chatId: string) => {
     try {
+      // Set flag to prevent domain change effect from clearing messages
+      isLoadingChatRef.current = true
+      
       const response = await fetch(`/api/chats/${chatId}`)
       if (response.ok) {
         const data = await response.json()
+        
+        // Update previous domain ref before changing domain to prevent clearing
+        if (data.chat.domain) {
+          previousDomainRef.current = data.chat.domain
+        }
+        
+        // Load messages and set chat ID
         setMessages(data.chat.messages)
         setCurrentChatId(chatId)
-        // Restore the domain from the chat
+        
+        // Restore the domain from the chat (this will trigger the effect, but flag prevents clearing)
         if (data.chat.domain) {
           setDomain(data.chat.domain)
         }
@@ -139,6 +212,7 @@ export default function Home() {
     } catch (error) {
       console.error('Failed to load chat:', error)
       toast.error('Failed to load chat')
+      isLoadingChatRef.current = false
     }
   }
 
@@ -216,7 +290,15 @@ export default function Home() {
         <div className={`flex-1 flex flex-col transition-all duration-300 ${isSidebarOpen ? 'lg:ml-80' : 'lg:ml-0'}`}>
           <div className="sticky top-0 z-30 border-b border-gray-200 dark:border-gray-800 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm">
             <div className="max-w-4xl mx-auto px-4 py-3 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-4">
-              <DomainSelector value={currentDomain} onChange={setDomain} />
+              <DomainSelector 
+                value={currentDomain} 
+                onChange={(newDomain) => {
+                  // Only change domain if it's different
+                  if (newDomain !== currentDomain) {
+                    setDomain(newDomain)
+                  }
+                }} 
+              />
               <ThemeToggle />
             </div>
           </div>

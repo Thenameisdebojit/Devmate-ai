@@ -1,8 +1,31 @@
+/**
+ * App Generator API Route
+ * 
+ * Workspace-aware agent entry point with tool call support and checkpoint integration.
+ * 
+ * ARCHITECTURE:
+ * - Initializes workspace context for the project
+ * - Uses Agent Orchestrator abstraction for execution
+ * - Supports tool calls and checkpoints
+ * - Falls back to Python agent (if available) or direct AI generation
+ * 
+ * TECH STACK ASSUMPTIONS:
+ * - Frontend: Next.js + Monaco (UI layer unchanged)
+ * - Backend: Agent Orchestrator abstraction
+ * - Runtime: Container-per-project model (interface only, implementation deferred)
+ */
+
 import { NextRequest, NextResponse } from 'next/server'
 import { spawn } from 'child_process'
 import { join } from 'path'
 import { promises as fs } from 'fs'
 import archiver from 'archiver'
+import { WorkspaceContextManager, AgentOrchestrator } from '@/lib/appGeneratorAgent'
+
+// Generate project ID (simple implementation - can use uuid library if needed)
+function generateProjectId(): string {
+  return `proj-${Date.now().toString(36)}-${Math.random().toString(36).substr(2, 8)}`
+}
 
 interface ProjectFile {
   path: string
@@ -28,7 +51,7 @@ const logger = {
 
 export async function POST(req: NextRequest) {
   try {
-    const { prompt, stream = true } = await req.json()
+    const { prompt, stream = true, projectId, toolCalls } = await req.json()
 
     if (!prompt) {
       return NextResponse.json(
@@ -36,6 +59,16 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       )
     }
+
+    // Initialize workspace context (agent foundation)
+    // AGENT RULE: Workspace context must be initialized before any operations
+    const workspaceProjectId = projectId || generateProjectId()
+    const workspaceContext = new WorkspaceContextManager(workspaceProjectId)
+    const agentOrchestrator = new AgentOrchestrator(workspaceContext)
+
+    // Create initial checkpoint (agent rule: mandatory checkpoints before writes)
+    const checkpointId = agentOrchestrator.createCheckpoint()
+    logger.info(`Workspace context initialized: ${workspaceProjectId}, checkpoint: ${checkpointId}`)
 
     if (stream) {
       const encoder = new TextEncoder()
@@ -48,12 +81,40 @@ export async function POST(req: NextRequest) {
               )
             }
 
-            sendStep({
-              step: 1,
-              total: 6,
-              message: 'Initializing autonomous development agent...',
-              status: 'in_progress'
-            })
+            // If tool calls are provided, process them (agent rule: tool-first)
+            if (toolCalls && Array.isArray(toolCalls) && toolCalls.length > 0) {
+              sendStep({
+                step: 1,
+                total: 6,
+                message: 'Processing tool calls...',
+                status: 'in_progress'
+              })
+
+              // Process tool calls through workspace context
+              // This is where tool execution would happen (implementation deferred)
+              for (const toolCall of toolCalls) {
+                workspaceContext.updateFromToolResult(
+                  toolCall.name,
+                  toolCall.operation || 'read',
+                  toolCall.parameters?.path || '',
+                  toolCall.parameters?.content
+                )
+              }
+
+              sendStep({
+                step: 1,
+                total: 6,
+                message: 'Tool calls processed, initializing agent...',
+                status: 'completed'
+              })
+            } else {
+              sendStep({
+                step: 1,
+                total: 6,
+                message: 'Initializing workspace-aware agent...',
+                status: 'in_progress'
+              })
+            }
 
             // Call Python script
             const agentDir = join(process.cwd(), 'autonomus-dev-agent')
@@ -323,6 +384,20 @@ export async function POST(req: NextRequest) {
               throw new Error(`Invalid project structure: No files were generated. ${projectData.error || 'The generation may have failed. Please try again or check the logs.'}`)
             }
 
+            // Update workspace context with generated files
+            // AGENT RULE: All file operations must be traceable through workspace context
+            if (projectData.files && Array.isArray(projectData.files)) {
+              for (const file of projectData.files) {
+                workspaceContext.updateFromToolResult(
+                  'generate_app',
+                  'write',
+                  file.path,
+                  file.content
+                )
+              }
+              logger.info(`Updated workspace context with ${projectData.files.length} files`)
+            }
+
             // Convert to expected format
             const formattedProject = {
               projectName: projectData.projectName || 'generated-project',
@@ -332,7 +407,13 @@ export async function POST(req: NextRequest) {
                 path: f.path || f,
                 content: f.content || ''
               })),
-              setupInstructions: projectData.setupInstructions || 'See README.md for setup instructions.'
+              setupInstructions: projectData.setupInstructions || 'See README.md for setup instructions.',
+              // Include workspace metadata for agent-aware clients
+              workspaceMetadata: {
+                projectId: workspaceProjectId,
+                checkpointId,
+                fileCount: projectData.files?.length || 0,
+              }
             }
 
             sendStep({
