@@ -25,3 +25,22 @@ export {
   type AgentObservation,
 } from './AgentObserver'
 
+export {
+  AgentActionHandler,
+  getAgentActionHandler,
+  destroyAgentActionHandler,
+  type AgentActionType,
+} from './AgentActionHandler'
+
+export {
+  type AgentPlan,
+  type AgentPlanStep,
+  type PlanExecutionContext,
+} from './AgentPlan'
+
+export {
+  AgentPlanExecutor,
+  getAgentPlanExecutor,
+  destroyAgentPlanExecutor,
+} from './AgentPlanExecutor'
+

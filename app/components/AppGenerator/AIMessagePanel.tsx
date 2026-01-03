@@ -13,6 +13,7 @@ export interface AIMessage {
   timestamp: number
   confidence?: number // 0-100
   progress?: number // 0-100
+  category?: string // For suggestions: 'build-fix', etc.
   errorDetails?: {
     type: string
     explanation: string
@@ -23,6 +24,7 @@ export interface AIMessage {
     question: string
     actions: Array<{ label: string; action: string }>
   }
+  plan?: any // AgentPlan for plan preview
 }
 
 export interface ToolCall {
@@ -38,9 +40,14 @@ interface AIMessagePanelProps {
   isStreaming?: boolean
   onFileClick?: (path: string) => void
   onFollowUpAction?: (action: string, messageId: string) => void
+  onFixAction?: (messageId: string) => void
+  onPlanApproved?: (planId: string) => void
+  onStepApproved?: (planId: string, stepId: string) => void
+  onStepRollback?: (planId: string, stepId: string) => void
+  onPlanRollback?: (planId: string) => void
 }
 
-export default function AIMessagePanel({ messages, isStreaming, onFileClick, onFollowUpAction }: AIMessagePanelProps) {
+export default function AIMessagePanel({ messages, isStreaming, onFileClick, onFollowUpAction, onFixAction, onPlanApproved, onStepApproved, onStepRollback, onPlanRollback }: AIMessagePanelProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -159,6 +166,111 @@ export default function AIMessagePanel({ messages, isStreaming, onFileClick, onF
                 {message.content && (
                   <div className="text-sm text-gray-700 dark:text-gray-300 mb-2 whitespace-pre-wrap">
                     {message.content}
+                  </div>
+                )}
+
+                {/* Fix it button for suggestions */}
+                {message.type === 'suggestion' && message.category === 'build-fix' && !message.plan && onFixAction && (
+                  <div className="mt-3">
+                    <button
+                      onClick={() => onFixAction(message.id)}
+                      className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 rounded hover:bg-amber-200 dark:hover:bg-amber-900/50 transition-colors"
+                    >
+                      <FiSettings className="w-3 h-3" />
+                      Fix it
+                    </button>
+                  </div>
+                )}
+
+                {/* Plan preview and approval */}
+                {message.plan && (
+                  <div className="mt-3 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                    <div className="mb-3">
+                      <h4 className="text-sm font-semibold text-blue-700 dark:text-blue-400 mb-1">
+                        {message.plan.title}
+                      </h4>
+                      <p className="text-xs text-blue-600 dark:text-blue-300 mb-3">
+                        {message.plan.summary}
+                      </p>
+                      <div className="text-xs font-semibold text-amber-700 dark:text-amber-400 mb-2">
+                        ⚠️ No changes will be made until you approve.
+                      </div>
+                    </div>
+
+                    {/* Plan steps */}
+                    <div className="space-y-2 mb-3">
+                      {message.plan.steps.map((step: any, index: number) => (
+                        <div
+                          key={step.stepId}
+                          className="p-2 bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700"
+                        >
+                          <div className="flex items-start gap-2">
+                            <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
+                              {index + 1}.
+                            </span>
+                            <div className="flex-1">
+                              <div className="text-xs text-gray-700 dark:text-gray-300">
+                                {step.description}
+                              </div>
+                              <div className="mt-1 flex items-center gap-2">
+                                <span
+                                  className={`text-xs px-1.5 py-0.5 rounded ${
+                                    step.status === 'completed'
+                                      ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
+                                      : step.status === 'approved'
+                                      ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400'
+                                      : step.status === 'executing'
+                                      ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400'
+                                      : step.status === 'rolled_back'
+                                      ? 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-400'
+                                      : 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400'
+                                  }`}
+                                >
+                                  {step.status}
+                                </span>
+                                {step.status === 'completed' && step.checkpointId && onStepRollback && (
+                                  <button
+                                    onClick={() => onStepRollback(message.plan.planId, step.stepId)}
+                                    className="text-xs text-red-600 dark:text-red-400 hover:underline"
+                                  >
+                                    Rollback
+                                  </button>
+                                )}
+                                {step.status === 'pending' && message.plan.status === 'approved' && onStepApproved && (
+                                  <button
+                                    onClick={() => onStepApproved(message.plan.planId, step.stepId)}
+                                    className="text-xs px-2 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded hover:bg-blue-200 dark:hover:bg-blue-900/50"
+                                  >
+                                    Approve Step
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Plan actions */}
+                    <div className="flex items-center gap-2">
+                      {message.plan.status === 'proposed' && onPlanApproved && (
+                        <button
+                          onClick={() => onPlanApproved(message.plan.planId)}
+                          className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded hover:bg-green-200 dark:hover:bg-green-900/50 transition-colors"
+                        >
+                          <FiCheck className="w-3 h-3" />
+                          Approve Plan
+                        </button>
+                      )}
+                      {message.plan.status === 'approved' && message.plan.steps.some((s: any) => s.status === 'completed') && onPlanRollback && (
+                        <button
+                          onClick={() => onPlanRollback(message.plan.planId)}
+                          className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 rounded hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors"
+                        >
+                          Rollback Plan
+                        </button>
+                      )}
+                    </div>
                   </div>
                 )}
 

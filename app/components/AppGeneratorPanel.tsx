@@ -14,7 +14,7 @@ import AgentPresence from './AppGenerator/AgentPresence'
 import PromptInput from './AppGenerator/PromptInput'
 import { AgentMessageGenerator } from '@/lib/runtime/agentMessages'
 import { contextCache } from '@/lib/runtime/contextCache'
-import { getWorkspaceDaemon as getCoreWorkspaceDaemon, getAgentObserver } from '@/core/workspace'
+import { getWorkspaceDaemon as getCoreWorkspaceDaemon, getAgentObserver, getAgentActionHandler, getAgentPlanExecutor, type AgentPlan } from '@/core/workspace'
 
 interface ProjectFile {
   path: string
@@ -73,6 +73,12 @@ export default function AppGeneratorPanel() {
     // Initialize agent observer (read-only intelligence)
     const observer = getAgentObserver(currentProjectId)
     
+    // Initialize agent action handler (user-approved actions only)
+    const actionHandler = getAgentActionHandler(currentProjectId)
+    
+    // Initialize agent plan executor (multi-step plans)
+    const planExecutor = getAgentPlanExecutor(currentProjectId)
+    
     // Subscribe to agent observations
     const eventBus = daemon.getEventBus()
     const handleObservation = (payload: any) => {
@@ -99,10 +105,86 @@ export default function AppGeneratorPanel() {
           type: 'suggestion',
           content: payload.message,
           timestamp: payload.timestamp,
+          category: payload.category, // Store category for Fix it button logic
         },
       ])
     }
     eventBus.on('AGENT_SUGGESTION', handleSuggestion)
+
+    // Subscribe to plan proposals
+    const handlePlanProposed = (payload: any) => {
+      const { plan } = payload
+      planExecutor.registerPlan(plan)
+      // Add plan as a special message type
+      setAiMessages((prev) => [
+        ...prev,
+        {
+          id: `plan-${plan.planId}`,
+          type: 'suggestion',
+          content: `Plan: ${plan.title}\n\n${plan.summary}\n\nSteps:\n${plan.steps.map((s: any, i: number) => `${i + 1}. ${s.description}`).join('\n')}\n\n⚠️ No changes will be made until you approve.`,
+          timestamp: plan.createdAt,
+          category: 'plan',
+          plan: plan, // Store full plan object
+        },
+      ])
+    }
+    eventBus.on('AGENT_PLAN_PROPOSED', handlePlanProposed)
+
+    // Subscribe to plan step completion to update UI
+    const handleStepCompleted = (payload: any) => {
+      const { planId, stepId, result } = payload
+      // Update the plan message in UI
+      setAiMessages((prev) =>
+        prev.map((msg) => {
+          if (msg.plan && msg.plan.planId === planId) {
+            const updatedPlan = { ...msg.plan }
+            const step = updatedPlan.steps.find((s: any) => s.stepId === stepId)
+            if (step) {
+              step.status = 'completed'
+              step.result = result
+            }
+            return { ...msg, plan: updatedPlan }
+          }
+          return msg
+        })
+      )
+    }
+    eventBus.on('AGENT_PLAN_STEP_COMPLETED', handleStepCompleted)
+
+    // Subscribe to FILE_CHANGED events from agent actions to sync UI
+    const handleFileChanged = (payload: any) => {
+      const { path, content } = payload
+      
+      // Update editor tabs (update if open, add if not)
+      setEditorTabs((prev) => {
+        const isOpen = prev.some((tab) => tab.path === path)
+        if (isOpen) {
+          return prev.map((tab) =>
+            tab.path === path
+              ? { ...tab, content, dirty: true, modifiedByAI: true }
+              : tab
+          )
+        } else {
+          return [...prev, { path, content, dirty: true, modifiedByAI: true }]
+        }
+      })
+
+      // Update files array
+      setFiles((prev) =>
+        prev.map((file) =>
+          file.path === path
+            ? { ...file, content, dirty: true, modifiedByAI: true }
+            : file
+        )
+      )
+
+      // Switch to the modified file
+      setActiveTab(path)
+      setSelectedFile(path)
+
+      toast.success(`File ${path} updated by AI`)
+    }
+    eventBus.on('FILE_CHANGED', handleFileChanged)
 
     console.log('[WorkspaceDaemon] Initialized for project:', currentProjectId)
     console.log('[AgentObserver] Started observing workspace events')
@@ -110,6 +192,9 @@ export default function AppGeneratorPanel() {
     return () => {
       eventBus.off('AGENT_OBSERVATION', handleObservation)
       eventBus.off('AGENT_SUGGESTION', handleSuggestion)
+      eventBus.off('AGENT_PLAN_PROPOSED', handlePlanProposed)
+      eventBus.off('AGENT_PLAN_STEP_COMPLETED', handleStepCompleted)
+      eventBus.off('FILE_CHANGED', handleFileChanged)
     }
   }, [currentProjectId])
 
@@ -623,6 +708,43 @@ npm start
     }
   }
 
+  // Handle plan approval
+  const handlePlanApproved = useCallback((planId: string) => {
+    if (!currentProjectId) return
+    const daemon = getCoreWorkspaceDaemon(currentProjectId)
+    daemon.dispatch({
+      type: 'AGENT_PLAN_APPROVED',
+      payload: { planId },
+    })
+    toast.success('Plan approved. Starting execution...')
+  }, [currentProjectId])
+
+  // Handle step approval
+  const handleStepApproved = useCallback((planId: string, stepId: string) => {
+    if (!currentProjectId) return
+    const daemon = getCoreWorkspaceDaemon(currentProjectId)
+    daemon.dispatch({
+      type: 'AGENT_PLAN_STEP_APPROVED',
+      payload: { planId, stepId },
+    })
+  }, [currentProjectId])
+
+  // Handle step rollback
+  const handleStepRollback = useCallback(async (planId: string, stepId: string) => {
+    if (!currentProjectId) return
+    const executor = getAgentPlanExecutor(currentProjectId)
+    await executor.rollbackStep(planId, stepId)
+    toast.success('Step rolled back')
+  }, [currentProjectId])
+
+  // Handle plan rollback
+  const handlePlanRollback = useCallback(async (planId: string) => {
+    if (!currentProjectId) return
+    const executor = getAgentPlanExecutor(currentProjectId)
+    await executor.rollbackPlan(planId)
+    toast.success('Plan rolled back')
+  }, [currentProjectId])
+
   // Handle follow-up actions
   const handleFollowUpAction = async (action: string, messageId: string) => {
     switch (action) {
@@ -654,6 +776,26 @@ npm start
         console.log('Unknown follow-up action:', action)
     }
   }
+
+  // Handle fix action (user-approved)
+  const handleFixAction = useCallback((messageId: string) => {
+    if (!currentProjectId) {
+      toast.error('No project active')
+      return
+    }
+
+    // Dispatch AGENT_ACTION_REQUESTED event
+    const daemon = getCoreWorkspaceDaemon(currentProjectId)
+    daemon.dispatch({
+      type: 'AGENT_ACTION_REQUESTED',
+      payload: {
+        actionType: 'FIX_BUILD_ERROR',
+      },
+    })
+
+    // Show user feedback
+    toast.success('Fixing build error...')
+  }, [currentProjectId])
 
   // Run project
   const handleRun = async () => {
@@ -911,6 +1053,11 @@ npm start
           isStreaming={isStreaming}
           onFileClick={handleFileSelect}
           onFollowUpAction={handleFollowUpAction}
+          onFixAction={handleFixAction}
+          onPlanApproved={handlePlanApproved}
+          onStepApproved={handleStepApproved}
+          onStepRollback={handleStepRollback}
+          onPlanRollback={handlePlanRollback}
         />
       </div>
 

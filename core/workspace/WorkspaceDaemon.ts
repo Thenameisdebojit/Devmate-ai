@@ -80,6 +80,11 @@ export type WorkspaceEvent =
   | { type: 'CURSOR_IDLE'; payload: { filePath: string; duration: number } }
   | { type: 'AGENT_OBSERVATION'; payload: { id: string; timestamp: number; message: string; category: string; confidence: number } }
   | { type: 'AGENT_SUGGESTION'; payload: { id: string; timestamp: number; message: string; category: string; confidence: number } }
+  | { type: 'AGENT_ACTION_REQUESTED'; payload: { actionType: string } }
+  | { type: 'AGENT_PLAN_PROPOSED'; payload: { plan: any } }
+  | { type: 'AGENT_PLAN_APPROVED'; payload: { planId: string } }
+  | { type: 'AGENT_PLAN_STEP_APPROVED'; payload: { planId: string; stepId: string } }
+  | { type: 'AGENT_PLAN_STEP_COMPLETED'; payload: { planId: string; stepId: string; result: any } }
 
 /**
  * Workspace Event Bus

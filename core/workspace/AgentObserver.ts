@@ -224,12 +224,12 @@ export class AgentObserver {
         }
 
         // Detect unstable files (frequent saves)
-        const recentSaves = saves.filter((s) => now - s < 30000) // Last 30 seconds
-        if (recentSaves.length >= 3) {
+        const recentSaves = saves.filter((s) => now - s < 10000) // Last 10 seconds
+        if (recentSaves.length >= 2) {
           observations.push({
             id: `obs-${Date.now()}-${Math.random()}`,
             timestamp: Date.now(),
-            message: `[observing] ${path} saved ${recentSaves.length} times in 30 seconds. File may be unstable or in active refactoring.`,
+            message: `[observing] ${path} was saved multiple times in a short period.`,
             category: 'stability',
             confidence: 0.75,
           })
