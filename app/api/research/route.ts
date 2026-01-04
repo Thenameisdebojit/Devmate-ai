@@ -250,9 +250,9 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    if (!process.env.OPENAI_API_KEY) {
+    if (!process.env.OPENAI_API_KEY && !process.env.GEMINI_API_KEY) {
       return NextResponse.json(
-        { error: 'OPENAI_API_KEY is required for research functionality' },
+        { error: 'AI API keys (OPENAI or GEMINI) are required for research functionality' },
         { status: 500 }
       )
     }

@@ -19,7 +19,7 @@
 
 import { WorkspaceContextManager, WorkspaceContext } from './workspaceContext'
 import { AGENT_RULES, getAgentSystemInstruction, validateToolCall } from './agentRules'
-import { callAIModel, streamAIModel } from '../aiOrchestrator'
+import { callAIModel, streamAIModel, callAIModelWithFailover, streamAIModelWithFailover } from '../aiOrchestrator'
 
 export interface ToolCall {
   id: string
@@ -163,12 +163,12 @@ ${contextInfo}`
 
     try {
       // Stream from AI model
-      for await (const chunk of streamAIModel('openai:gpt-5', {
+      for await (const chunk of streamAIModelWithFailover({
         prompt: enhancedPrompt,
         systemInstruction,
         temperature: 0.2,
         maxTokens: 4096,
-      })) {
+      }, 'auto')) {
         // Yield text chunks
         yield {
           type: 'text',

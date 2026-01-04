@@ -766,11 +766,11 @@ npm start
         if (lastMessage?.type === 'error') {
           // Find the command that failed and retry
           // This is a simplified version - in production, track the last command
-          toast.info('Retrying last command...')
+          toast('Retrying last command...', { icon: '🔄' })
         }
         break
       case 'help':
-        toast.info('Help documentation will be available soon')
+        toast('Help documentation will be available soon', { icon: 'ℹ️' })
         break
       default:
         console.log('Unknown follow-up action:', action)
@@ -926,7 +926,7 @@ npm start
       },
     ])
     // TODO: Implement error fixing logic
-    toast.info('Fix errors functionality will be implemented')
+    toast('Fix errors functionality will be implemented', { icon: 'ℹ️' })
   }
 
   // Explain architecture
@@ -940,7 +940,7 @@ npm start
       },
     ])
     // TODO: Implement explanation logic
-    toast.info('Explain architecture functionality will be implemented')
+    toast('Explain architecture functionality will be implemented', { icon: 'ℹ️' })
   }
 
   // Optimize
@@ -954,7 +954,7 @@ npm start
       },
     ])
     // TODO: Implement optimization logic
-    toast.info('Optimize functionality will be implemented')
+    toast('Optimize functionality will be implemented', { icon: 'ℹ️' })
   }
 
   return (

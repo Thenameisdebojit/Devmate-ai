@@ -1,0 +1,17 @@
+{
+  "id": "checkpoint-R5Jj-9j6ctI2",
+  "projectId": "proj-mjxvcq8q-1w6j0kky",
+  "timestamp": 1767418532853,
+  "description": "Checkpoint before container creation",
+  "type": "pre-write",
+  "files": [
+    "package.json",
+    "README.md",
+    "src/index.ts"
+  ],
+  "metadata": {
+    "trigger": "pre-write",
+    "fileCount": 3,
+    "totalSize": 330
+  }
+}

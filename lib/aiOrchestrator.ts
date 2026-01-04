@@ -10,24 +10,23 @@ import { GoogleGenAI } from '@google/genai'
 // DON'T DELETE THIS COMMENT - from blueprint:javascript_xai
 // Grok models available: grok-4 (latest, most intelligent), grok-2-1212 (text-only, 131k context), grok-2-vision-1212 (vision support)
 
-if (!process.env.OPENAI_API_KEY) {
-  throw new Error('OPENAI_API_KEY environment variable is required')
+if (!process.env.OPENAI_API_KEY && !process.env.GEMINI_API_KEY) {
+  // Allow starting without keys, but warn
+  console.warn('No AI API keys found in environment variables')
 }
 
-if (!process.env.GEMINI_API_KEY) {
-  throw new Error('GEMINI_API_KEY environment variable is required')
-}
-
-const openai = new OpenAI({ 
+const openai = process.env.OPENAI_API_KEY ? new OpenAI({ 
   apiKey: process.env.OPENAI_API_KEY
-})
+}) : null
 
 // Initialize GoogleGenAI with proper error handling
 let gemini: GoogleGenAI | null = null
 try {
-  gemini = new GoogleGenAI({ 
-    apiKey: process.env.GEMINI_API_KEY
-  })
+  if (process.env.GEMINI_API_KEY) {
+    gemini = new GoogleGenAI({ 
+      apiKey: process.env.GEMINI_API_KEY
+    })
+  }
 } catch (error) {
   console.error('Failed to initialize GoogleGenAI:', error)
   // Will throw error when actually used if not initialized
@@ -44,9 +43,9 @@ if (process.env.XAI_API_KEY) {
 }
 
 // Environment-based model preference
-const PREFERRED_GPT_MODEL = process.env.PREFERRED_GPT_MODEL === 'gpt-4o' ? 'gpt-4o' : 'gpt-5'
+const PREFERRED_GPT_MODEL = process.env.PREFERRED_GPT_MODEL === 'gpt-4o' ? 'gpt-4o' : 'gpt-4o' // Default to 4o as 5 is not out
 
-export type AIModel = 'openai:gpt-5' | 'openai:gpt-4o' | 'google:gemini-2.5-pro' | 'google:gemini-2.5-flash' | 'xai:grok-4' | 'xai:grok-2-1212' | 'xai:grok-vision-beta'
+export type AIModel = 'openai:gpt-5' | 'openai:gpt-4o' | 'google:gemini-1.5-pro' | 'google:gemini-1.5-flash' | 'google:gemini-2.5-pro' | 'google:gemini-2.5-flash' | 'xai:grok-4' | 'xai:grok-2-1212' | 'xai:grok-vision-beta'
 
 export interface AIRequest {
   prompt: string
@@ -75,8 +74,8 @@ export function chooseModel(
     const validModels: AIModel[] = [
       'openai:gpt-5', 
       'openai:gpt-4o', 
-      'google:gemini-2.5-pro', 
-      'google:gemini-2.5-flash', 
+      'google:gemini-1.5-pro', 
+      'google:gemini-1.5-flash', 
       'xai:grok-4', 
       'xai:grok-2-1212', 
       'xai:grok-vision-beta'
@@ -88,10 +87,10 @@ export function chooseModel(
     
     // Handle legacy format for backward compatibility
     if (userPreference === 'chatgpt-5') {
-      return 'openai:gpt-5'
-    } else if (userPreference === 'gemini-2.5-pro') {
+      return 'openai:gpt-4o' // Fallback to 4o
+    } else if (userPreference === 'gemini-2.5-pro' || userPreference === 'gemini-1.5-pro') {
       return 'google:gemini-2.5-pro'
-    } else if (userPreference === 'gemini-2.5-flash') {
+    } else if (userPreference === 'gemini-2.5-flash' || userPreference === 'gemini-1.5-flash') {
       return 'google:gemini-2.5-flash'
     } else if (userPreference === 'grok-4') {
       return 'xai:grok-4'
@@ -113,39 +112,39 @@ export function chooseModel(
   const isSimpleQuery = simpleKeywords.some(k => lowerPrompt.startsWith(k))
   
   if (shortQuery && isSimpleQuery && action !== 'generate') {
-    return 'google:gemini-2.5-flash'
+    return 'google:gemini-1.5-flash'
   }
   
-  // Code generation and building tasks -> GPT-5
+  // Code generation and building tasks -> GPT-4o or Gemini 1.5 Pro
   const codeKeywords = ['code', 'build', 'create', 'generate', 'implement', 'function', 'class', 'backend', 'frontend', 'api', 'database', 'app', 'application', 'website', 'program']
   const hasCodeKeywords = codeKeywords.some(k => lowerPrompt.includes(k) || lowerDomain.includes(k))
   
-  // Actions that benefit from GPT-5
+  // Actions that benefit from smarter models
   const codeActions = ['generate', 'rewrite', 'fix']
   const isCodeAction = action && codeActions.includes(action)
   
   // Web Development domain always uses preferred GPT model
   if (lowerDomain.includes('web') || lowerDomain.includes('development')) {
-    return PREFERRED_GPT_MODEL === 'gpt-4o' ? 'openai:gpt-4o' : 'openai:gpt-5'
+    return PREFERRED_GPT_MODEL === 'gpt-4o' ? 'openai:gpt-4o' : 'openai:gpt-4o'
   }
   
   // Code-related tasks use preferred GPT model
   if (hasCodeKeywords || isCodeAction) {
-    return PREFERRED_GPT_MODEL === 'gpt-4o' ? 'openai:gpt-4o' : 'openai:gpt-5'
+    return PREFERRED_GPT_MODEL === 'gpt-4o' ? 'openai:gpt-4o' : 'openai:gpt-4o'
   }
   
-  // Reasoning, summaries, explanations -> Gemini 2.5 Flash for speed
+  // Reasoning, summaries, explanations -> Gemini 1.5 Flash for speed
   const reasoningKeywords = ['explain', 'analyze', 'summarize', 'what is', 'how does', 'why', 'describe', 'compare']
   const hasReasoningKeywords = reasoningKeywords.some(k => lowerPrompt.includes(k))
   
   if (hasReasoningKeywords || action === 'explain') {
-    return 'google:gemini-2.5-flash'
+    return 'google:gemini-1.5-flash'
   }
   
   // Default: use Flash for general conversation, GPT for complex tasks
   return promptLength > 200 || hasCodeKeywords 
-    ? (PREFERRED_GPT_MODEL === 'gpt-4o' ? 'openai:gpt-4o' : 'openai:gpt-5')
-    : 'google:gemini-2.5-flash'
+    ? (PREFERRED_GPT_MODEL === 'gpt-4o' ? 'openai:gpt-4o' : 'openai:gpt-4o')
+    : 'google:gemini-1.5-flash'
 }
 
 // Helper function to check if error is a rate limit/quota error
@@ -189,6 +188,9 @@ export async function callAIModel(
   
   try {
     if (model.startsWith('openai')) {
+      if (!openai) {
+        throw new Error('OpenAI API key not configured')
+      }
       const messages: OpenAI.Chat.ChatCompletionMessageParam[] = []
       
       if (systemInstruction) {
@@ -214,7 +216,7 @@ export async function callAIModel(
         throw new Error('GoogleGenAI not initialized. Check GEMINI_API_KEY.')
       }
       
-      const modelName = model.includes('flash') ? 'gemini-2.5-flash' : 'gemini-2.5-pro'
+      const modelName = model.includes('flash') ? 'gemini-1.5-flash' : 'gemini-1.5-pro'
       
       try {
         // Try the official @google/generative-ai API structure first
@@ -337,9 +339,14 @@ export async function callAIModelWithFailover(
     // Smart failover logic - prioritize OpenAI when Gemini has quota issues
     const fallbackModels: AIModel[] = []
     
-    // If Gemini failed due to quota, prioritize OpenAI models
+    // If Gemini failed due to quota, prioritize OpenAI models but try Flash first if applicable
     if (isQuotaError && primaryModel.startsWith('google')) {
-      // Skip all Gemini models if quota exceeded
+      // If primary was NOT flash, try flash first as it often has higher quotas
+      if (!primaryModel.includes('flash')) {
+        fallbackModels.push('google:gemini-1.5-flash')
+      }
+
+      // Then try OpenAI models
       fallbackModels.push(
         PREFERRED_GPT_MODEL === 'gpt-4o' ? 'openai:gpt-4o' : 'openai:gpt-5',
         PREFERRED_GPT_MODEL === 'gpt-5' ? 'openai:gpt-4o' : 'openai:gpt-5'
@@ -353,30 +360,30 @@ export async function callAIModelWithFailover(
         fallbackModels.push('openai:gpt-4o')
         // Only add Gemini if we haven't seen quota errors recently
         if (!isQuotaError) {
-          fallbackModels.push('google:gemini-2.5-flash', 'google:gemini-2.5-pro')
+          fallbackModels.push('google:gemini-1.5-flash', 'google:gemini-1.5-pro')
         }
         if (xai) fallbackModels.push('xai:grok-4')
       } else if (primaryModel === 'openai:gpt-4o') {
         fallbackModels.push('openai:gpt-5')
         if (!isQuotaError) {
-          fallbackModels.push('google:gemini-2.5-flash', 'google:gemini-2.5-pro')
+          fallbackModels.push('google:gemini-1.5-flash', 'google:gemini-1.5-pro')
         }
         if (xai) fallbackModels.push('xai:grok-4')
-      } else if (primaryModel === 'google:gemini-2.5-pro') {
+      } else if (primaryModel === 'google:gemini-1.5-pro') {
         if (!isQuotaError) {
-          fallbackModels.push('google:gemini-2.5-flash')
+          fallbackModels.push('google:gemini-1.5-flash')
         }
         fallbackModels.push(PREFERRED_GPT_MODEL === 'gpt-4o' ? 'openai:gpt-4o' : 'openai:gpt-5')
         if (xai) fallbackModels.push('xai:grok-4')
-      } else if (primaryModel === 'google:gemini-2.5-flash') {
+      } else if (primaryModel === 'google:gemini-1.5-flash') {
         if (!isQuotaError) {
-          fallbackModels.push('google:gemini-2.5-pro')
+          fallbackModels.push('google:gemini-1.5-pro')
         }
         fallbackModels.push(PREFERRED_GPT_MODEL === 'gpt-4o' ? 'openai:gpt-4o' : 'openai:gpt-5')
         if (xai) fallbackModels.push('xai:grok-4')
       } else {
         if (!isQuotaError) {
-          fallbackModels.push('google:gemini-2.5-flash')
+          fallbackModels.push('google:gemini-1.5-flash')
         }
         fallbackModels.push(PREFERRED_GPT_MODEL === 'gpt-4o' ? 'openai:gpt-4o' : 'openai:gpt-5')
         if (xai) fallbackModels.push('xai:grok-4')
@@ -454,21 +461,21 @@ export async function* streamAIModelWithFailover(
           fallbackModels.push('google:gemini-2.5-flash', 'google:gemini-2.5-pro')
         }
         if (xai) fallbackModels.push('xai:grok-4')
-      } else if (primaryModel === 'google:gemini-2.5-pro') {
+      } else if (primaryModel === 'google:gemini-1.5-pro') {
         if (!isQuotaError) {
-          fallbackModels.push('google:gemini-2.5-flash')
+          fallbackModels.push('google:gemini-1.5-flash')
         }
         fallbackModels.push(PREFERRED_GPT_MODEL === 'gpt-4o' ? 'openai:gpt-4o' : 'openai:gpt-5')
         if (xai) fallbackModels.push('xai:grok-4')
-      } else if (primaryModel === 'google:gemini-2.5-flash') {
+      } else if (primaryModel === 'google:gemini-1.5-flash') {
         if (!isQuotaError) {
-          fallbackModels.push('google:gemini-2.5-pro')
+          fallbackModels.push('google:gemini-1.5-pro')
         }
         fallbackModels.push(PREFERRED_GPT_MODEL === 'gpt-4o' ? 'openai:gpt-4o' : 'openai:gpt-5')
         if (xai) fallbackModels.push('xai:grok-4')
       } else {
         if (!isQuotaError) {
-          fallbackModels.push('google:gemini-2.5-flash')
+          fallbackModels.push('google:gemini-1.5-flash')
         }
         fallbackModels.push(PREFERRED_GPT_MODEL === 'gpt-4o' ? 'openai:gpt-4o' : 'openai:gpt-5')
         if (xai) fallbackModels.push('xai:grok-4')
@@ -509,6 +516,9 @@ export async function* streamAIModel(
   const { prompt, systemInstruction, temperature = 0.3, maxTokens = 4096 } = request
   
   if (model.startsWith('openai')) {
+    if (!openai) {
+      throw new Error('OpenAI client not initialized. Check OPENAI_API_KEY.')
+    }
     const messages: OpenAI.Chat.ChatCompletionMessageParam[] = []
     
     if (systemInstruction) {
@@ -538,7 +548,12 @@ export async function* streamAIModel(
       throw new Error('GoogleGenAI not initialized. Check GEMINI_API_KEY.')
     }
     
-    const modelName = model.includes('flash') ? 'gemini-2.5-flash' : 'gemini-2.5-pro'
+    let modelName = 'gemini-2.5-pro' // Default to 2.5-pro
+    if (model.includes('gemini-1.5-flash')) modelName = 'gemini-1.5-flash'
+    else if (model.includes('gemini-1.5-pro')) modelName = 'gemini-1.5-pro'
+    else if (model.includes('gemini-2.5-flash')) modelName = 'gemini-2.5-flash'
+    else if (model.includes('gemini-2.5-pro')) modelName = 'gemini-2.5-pro'
+    else if (model.includes('flash')) modelName = 'gemini-2.5-flash' // Default flash to 2.5
     
     try {
       // Try the official @google/generative-ai streaming API structure first

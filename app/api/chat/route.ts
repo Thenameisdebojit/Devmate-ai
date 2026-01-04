@@ -2,13 +2,10 @@ import OpenAI from 'openai'
 import { NextRequest, NextResponse } from 'next/server'
 import { chooseModel, streamAIModelWithFailover } from '@/lib/aiOrchestrator'
 
-if (!process.env.OPENAI_API_KEY) {
-  throw new Error('OPENAI_API_KEY environment variable is required')
-}
-
-const openai = new OpenAI({
+// Initialize OpenAI conditionally to allow Gemini-only operation
+const openai = process.env.OPENAI_API_KEY ? new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
-})
+}) : null
 
 const USE_ORCHESTRATOR = process.env.USE_AI_ORCHESTRATOR !== 'false'
 
@@ -56,9 +53,9 @@ export async function POST(req: NextRequest) {
   try {
     const { prompt, action, code, instructions, error, domain, chatHistory, files, selectedAgent } = await req.json()
 
-    if (!process.env.OPENAI_API_KEY) {
+    if (!process.env.OPENAI_API_KEY && !process.env.GEMINI_API_KEY) {
       return NextResponse.json(
-        { error: 'Service unavailable: OpenAI API key not configured' },
+        { error: 'Service unavailable: No AI API keys configured' },
         { status: 503 }
       )
     }

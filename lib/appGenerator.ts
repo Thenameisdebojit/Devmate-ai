@@ -3,7 +3,7 @@
  * Generates complete applications using AI models directly without Python agent
  */
 
-import { callAIModel, streamAIModel } from './aiOrchestrator'
+import { callAIModel, streamAIModel, callAIModelWithFailover } from './aiOrchestrator'
 
 interface ProjectFile {
   path: string
@@ -127,12 +127,14 @@ For full-stack applications, include both frontend and backend folders with comp
 Remember to output ONLY valid JSON in the specified format.`
 
   try {
-    const response = await callAIModel('openai:gpt-5', {
+    const responseObj = await callAIModelWithFailover({
       prompt: enhancedPrompt,
       systemInstruction: SYSTEM_INSTRUCTION,
       temperature: 0.2,
       maxTokens: 16384, // Increased for complete apps
-    })
+    }, 'auto') // Let orchestrator decide based on available keys
+
+    const response = responseObj.text
 
     // Extract JSON from response
     let jsonMatch = response.match(/\{[\s\S]*\}/)
