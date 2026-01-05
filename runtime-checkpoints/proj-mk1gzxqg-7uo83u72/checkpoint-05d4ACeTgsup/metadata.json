@@ -1,0 +1,13 @@
+{
+  "id": "checkpoint-05d4ACeTgsup",
+  "projectId": "proj-mk1gzxqg-7uo83u72",
+  "timestamp": 1767636317203,
+  "description": "File mutation: undefined",
+  "type": "pre-write",
+  "files": [],
+  "metadata": {
+    "trigger": "pre-write",
+    "fileCount": 0,
+    "totalSize": 0
+  }
+}
