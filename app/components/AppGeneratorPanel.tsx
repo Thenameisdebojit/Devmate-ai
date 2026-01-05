@@ -14,7 +14,7 @@ import AgentPresence from './AppGenerator/AgentPresence'
 import PromptInput from './AppGenerator/PromptInput'
 import { AgentMessageGenerator } from '@/lib/runtime/agentMessages'
 import { contextCache } from '@/lib/runtime/contextCache'
-import { getWorkspaceDaemon as getCoreWorkspaceDaemon, getAgentObserver, getAgentActionHandler, getAgentPlanExecutor, type AgentPlan } from '@/core/workspace'
+import { getWorkspaceDaemon as getCoreWorkspaceDaemon, getAgentObserver, getAgentActionHandler, getAgentPlanExecutor, getAgentConfidenceEngine, type AgentPlan } from '@/core/workspace'
 
 interface ProjectFile {
   path: string
@@ -58,10 +58,57 @@ export default function AppGeneratorPanel() {
   const [previewUrl, setPreviewUrl] = useState<string | undefined>()
   const [currentProjectId, setCurrentProjectId] = useState<string | undefined>()
   const [isRunning, setIsRunning] = useState(false)
+  const [generationComplete, setGenerationComplete] = useState(false)
+  const [runtimeState, setRuntimeState] = useState<{
+    status: string
+    previewUrl?: string
+    previewStatus?: string
+    ptyActive?: boolean
+  } | null>(null)
+  const [confidenceReport, setConfidenceReport] = useState<{
+    confidenceScore: number
+    confidenceLevel: 'LOW' | 'MEDIUM' | 'HIGH'
+    riskLevel: 'LOW' | 'MEDIUM' | 'HIGH'
+    reasons: string[]
+  } | null>(null)
 
   // Editor sensor state
   const [cursorPosition, setCursorPosition] = useState<{ line: number; column: number } | undefined>()
   const [selection, setSelection] = useState<{ start: { line: number; column: number }; end: { line: number; column: number } } | undefined>()
+
+  // IDE LOCKSTEP RULE: Fetch runtime state on load
+  // UI_STATE = f(RUNTIME_STATE) - never the reverse
+  useEffect(() => {
+    if (!currentProjectId) return
+
+    // Fetch authoritative runtime state from kernel
+    const fetchRuntimeState = async () => {
+      try {
+        const response = await fetch(`/api/runtime/status?projectId=${currentProjectId}`)
+        if (response.ok) {
+          const data = await response.json()
+          if (data.state) {
+            setRuntimeState(data.state)
+            setIsRunning(data.state.status === 'running' || data.state.status === 'starting')
+            
+            // Set preview URL if available
+            if (data.state.previewUrl) {
+              setPreviewUrl(data.state.previewUrl)
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Failed to fetch runtime state:', error)
+      }
+    }
+
+    fetchRuntimeState()
+
+    // Poll for state updates (every 2 seconds)
+    const interval = setInterval(fetchRuntimeState, 2000)
+
+    return () => clearInterval(interval)
+  }, [currentProjectId])
 
   // Initialize workspace daemon and agent observer
   useEffect(() => {
@@ -78,6 +125,29 @@ export default function AppGeneratorPanel() {
     
     // Initialize agent plan executor (multi-step plans)
     const planExecutor = getAgentPlanExecutor(currentProjectId)
+    
+    // Initialize agent confidence engine
+    const confidenceEngine = getAgentConfidenceEngine(currentProjectId)
+    
+    // Get initial confidence report
+    const initialReport = confidenceEngine.getCurrentReport()
+    setConfidenceReport({
+      confidenceScore: initialReport.confidenceScore,
+      confidenceLevel: initialReport.confidenceLevel,
+      riskLevel: initialReport.riskLevel,
+      reasons: initialReport.reasons,
+    })
+    
+    // Subscribe to confidence updates from engine
+    const handleConfidenceUpdate = (report: any) => {
+      setConfidenceReport({
+        confidenceScore: report.confidenceScore,
+        confidenceLevel: report.confidenceLevel,
+        riskLevel: report.riskLevel,
+        reasons: report.reasons,
+      })
+    }
+    confidenceEngine.on('confidenceUpdated', handleConfidenceUpdate)
     
     // Subscribe to agent observations
     const eventBus = daemon.getEventBus()
@@ -115,13 +185,29 @@ export default function AppGeneratorPanel() {
     const handlePlanProposed = (payload: any) => {
       const { plan } = payload
       planExecutor.registerPlan(plan)
+      
+      // Get current confidence context for plan message
+      let confidenceNote = ''
+      try {
+        const currentReport = confidenceEngine.getCurrentReport()
+        if (currentReport.riskLevel === 'HIGH') {
+          confidenceNote = '\n\n⚠️ High risk detected — recent build failures or crashes.'
+        } else if (currentReport.riskLevel === 'MEDIUM') {
+          confidenceNote = '\n\n⚠️ Some risk detected — monitor closely.'
+        } else if (currentReport.confidenceLevel === 'HIGH' && currentReport.riskLevel === 'LOW') {
+          confidenceNote = '\n\n✓ This looks safe based on recent stable builds.'
+        }
+      } catch {
+        // Confidence engine not available, skip context
+      }
+      
       // Add plan as a special message type
       setAiMessages((prev) => [
         ...prev,
         {
           id: `plan-${plan.planId}`,
           type: 'suggestion',
-          content: `Plan: ${plan.title}\n\n${plan.summary}\n\nSteps:\n${plan.steps.map((s: any, i: number) => `${i + 1}. ${s.description}`).join('\n')}\n\n⚠️ No changes will be made until you approve.`,
+          content: `Plan: ${plan.title}\n\n${plan.summary}\n\nSteps:\n${plan.steps.map((s: any, i: number) => `${i + 1}. ${s.description}`).join('\n')}${confidenceNote}\n\n⚠️ No changes will be made until you approve.`,
           timestamp: plan.createdAt,
           category: 'plan',
           plan: plan, // Store full plan object
@@ -150,6 +236,17 @@ export default function AppGeneratorPanel() {
       )
     }
     eventBus.on('AGENT_PLAN_STEP_COMPLETED', handleStepCompleted)
+
+    // Subscribe to confidence updates
+    const handleConfidenceUpdated = (payload: any) => {
+      setConfidenceReport({
+        confidenceScore: payload.confidenceScore,
+        confidenceLevel: payload.confidenceLevel,
+        riskLevel: payload.riskLevel,
+        reasons: payload.reasons,
+      })
+    }
+    eventBus.on('AGENT_CONFIDENCE_UPDATED', handleConfidenceUpdated)
 
     // Subscribe to FILE_CHANGED events from agent actions to sync UI
     const handleFileChanged = (payload: any) => {
@@ -195,6 +292,14 @@ export default function AppGeneratorPanel() {
       eventBus.off('AGENT_PLAN_PROPOSED', handlePlanProposed)
       eventBus.off('AGENT_PLAN_STEP_COMPLETED', handleStepCompleted)
       eventBus.off('FILE_CHANGED', handleFileChanged)
+      eventBus.off('AGENT_CONFIDENCE_UPDATED', handleConfidenceUpdated)
+      
+      // Cleanup confidence engine subscription
+      try {
+        confidenceEngine.off('confidenceUpdated', handleConfidenceUpdate)
+      } catch {
+        // Ignore cleanup errors
+      }
     }
   }, [currentProjectId])
 
@@ -618,6 +723,10 @@ npm start
       }
 
       if (projectData) {
+        // Check generation completion status from backend authority
+        const isComplete = projectData.workspaceMetadata?.generationComplete === true
+        setGenerationComplete(isComplete)
+
         // Convert project files to FileNode format
         const fileNodes = convertToFileNodes(projectData.files)
         setFiles(fileNodes)
@@ -653,8 +762,8 @@ npm start
         })
 
         // Cache response
-        const promptHash = contextCache.hashPrompt(prompt, projectData.workspaceMetadata?.projectId)
-        contextCache.cacheResponse(promptHash, prompt, JSON.stringify(projectData))
+        const promptHash = contextCache.hashPrompt(userPrompt, projectData.workspaceMetadata?.projectId)
+        contextCache.cacheResponse(promptHash, userPrompt, JSON.stringify(projectData))
 
         // Generate done message with follow-up
         const doneMessage = AgentMessageGenerator.generateMessage({
@@ -679,7 +788,12 @@ npm start
           },
         ])
 
-        toast.success('Application generated successfully!')
+        // Only show success if generation is actually complete
+        if (generationComplete) {
+          toast.success('Application generated successfully!')
+        } else {
+          toast.warning('Generation in progress. Please wait for completion before running.')
+        }
       }
     } catch (error: any) {
       console.error('Generation error:', error)
@@ -804,6 +918,12 @@ npm start
       return
     }
 
+    // BLOCK execution if generation is not complete
+    if (!generationComplete) {
+      toast.error('Generation not complete. Please wait for generation to finish before running.')
+      return
+    }
+
     setIsRunning(true)
     setAiMessages((prev) => [
       ...prev,
@@ -841,33 +961,37 @@ npm start
 
       const data = await response.json()
       const container = data.container
+      const runtimeState = data.runtimeState
 
-      // Get preview URL
-      const previewResponse = await fetch(`/api/runtime/preview/url?projectId=${currentProjectId}`)
-      if (previewResponse.ok) {
-        const previewData = await previewResponse.json()
-        setPreviewUrl(previewData.url)
-        setPanelType('preview')
+      // Update state from kernel (authoritative)
+      if (runtimeState) {
+        setRuntimeState(runtimeState)
+        if (runtimeState.previewUrl) {
+          setPreviewUrl(runtimeState.previewUrl)
+          setPanelType('preview')
+        }
+      } else {
+        // Fallback: Get preview URL
+        const previewResponse = await fetch(`/api/runtime/preview/url?projectId=${currentProjectId}`)
+        if (previewResponse.ok) {
+          const previewData = await previewResponse.json()
+          setPreviewUrl(previewData.url)
+          setPanelType('preview')
+        }
       }
 
       // Start streaming logs
       startLogStream(currentProjectId)
 
-      // Emit RUNTIME_STARTED event to workspace daemon
-      if (currentProjectId) {
-        const daemon = getCoreWorkspaceDaemon(currentProjectId)
-        daemon.dispatch({
-          type: 'RUNTIME_STARTED',
-          payload: { containerId: container.id, port: container.port },
-        })
-      }
+      // Events are emitted by RuntimeKernel - no need to emit here
+      // Kernel owns event emission
 
       setAiMessages((prev) => [
         ...prev,
         {
           id: `msg-${Date.now()}`,
           type: 'done',
-          content: `Project is running on port ${container.port}`,
+          content: `Project is running${runtimeState?.previewUrl ? ` - Preview: ${runtimeState.previewUrl}` : ''}`,
           timestamp: Date.now(),
         },
       ])
@@ -1058,6 +1182,7 @@ npm start
           onStepApproved={handleStepApproved}
           onStepRollback={handleStepRollback}
           onPlanRollback={handlePlanRollback}
+          confidenceReport={confidenceReport}
         />
       </div>
 

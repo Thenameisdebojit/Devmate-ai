@@ -1,48 +1,40 @@
 /**
  * Runtime API: Status
  * 
- * Get status of a running container.
+ * Returns authoritative runtime state from RuntimeKernel.
+ * UI must fetch this on load to rehydrate state.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { containerManager } from '@/lib/runtime/containerManager'
+import { RuntimeKernel } from '@/lib/runtime/runtimeKernel'
 
 export const runtime = 'nodejs'
+export const maxDuration = 60
 
 export async function GET(req: NextRequest) {
+  const searchParams = req.nextUrl.searchParams
+  const projectId = searchParams.get('projectId')
+
+  if (!projectId) {
+    return NextResponse.json(
+      { error: 'Project ID is required' },
+      { status: 400 }
+    )
+  }
+
   try {
-    const searchParams = req.nextUrl.searchParams
-    const projectId = searchParams.get('projectId')
-
-    if (!projectId) {
-      return NextResponse.json(
-        { error: 'Project ID is required' },
-        { status: 400 }
-      )
-    }
-
-    const status = containerManager.getContainerStatus(projectId)
-
-    if (!status) {
-      return NextResponse.json({
-        running: false,
-        message: 'Container not found',
-      })
-    }
+    // Get authoritative state from kernel
+    const kernel = RuntimeKernel.get(projectId)
+    const state = kernel.getState()
 
     return NextResponse.json({
-      running: status.status === 'running',
-      status: status.status,
-      port: status.port,
-      previewUrl: status.previewUrl,
-      createdAt: status.createdAt,
+      success: true,
+      state,
     })
   } catch (error: any) {
-    console.error('Status error:', error)
     return NextResponse.json(
-      { error: error.message || 'Failed to get status' },
+      { error: error.message || 'Failed to get runtime status' },
       { status: 500 }
     )
   }
 }
-

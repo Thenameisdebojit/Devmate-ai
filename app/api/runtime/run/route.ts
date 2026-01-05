@@ -6,6 +6,8 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { containerManager } from '@/lib/runtime/containerManager'
+import { GenerationController } from '@/lib/runtime/GenerationController'
+import { RuntimeKernel } from '@/lib/runtime/runtimeKernel'
 import { join } from 'path'
 import { promises as fs } from 'fs'
 
@@ -35,6 +37,35 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // PRE-BUILD VALIDATION: Block Docker build on incomplete projects
+    const generationController = new GenerationController(projectId, projectPath)
+    const validationStatus = await generationController.validateProject()
+
+    if (!validationStatus.complete) {
+      return NextResponse.json(
+        { 
+          error: 'Project incomplete — generation not finished',
+          missingArtifacts: validationStatus.missingArtifacts,
+          issues: validationStatus.issues,
+          fileCount: validationStatus.fileCount,
+          requiredMinimum: validationStatus.requiredMinimum,
+        },
+        { status: 400 }
+      )
+    }
+
+    // Get RuntimeKernel instance
+    const kernel = RuntimeKernel.get(projectId)
+    const kernelState = kernel.getState()
+
+    // Check if runtime is already running
+    if (kernelState.status === 'running' || kernelState.status === 'starting') {
+      return NextResponse.json(
+        { error: 'Runtime is already running', state: kernelState },
+        { status: 400 }
+      )
+    }
+
     // Create and start container
     const containerStatus = await containerManager.createContainer({
       projectId,
@@ -42,9 +73,16 @@ export async function POST(req: NextRequest) {
       memoryLimit: '1g',
     })
 
+    // Start runtime via kernel (kernel owns lifecycle)
+    await kernel.startRuntime()
+
+    // Return kernel state (authoritative)
+    const finalState = kernel.getState()
+
     return NextResponse.json({
       success: true,
       container: containerStatus,
+      runtimeState: finalState,
     })
   } catch (error: any) {
     console.error('Run error:', error)

@@ -6,9 +6,14 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { checkpointEngine } from '@/lib/runtime/checkpointEngine'
 import { promises as fs } from 'fs'
 import { join } from 'path'
+
+// Dynamic import to ensure FileMutationKernel is only loaded server-side
+async function getFileMutationKernel(projectId: string, projectRoot: string) {
+  const { getFileMutationKernel: getKernel } = await import('@/lib/workspace/FileMutationKernel')
+  return getKernel(projectId, projectRoot)
+}
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -80,19 +85,33 @@ export async function POST(req: NextRequest) {
 
     const fixedContent = lines.join('\n')
 
-    // Write fixed file
-    try {
-      await fs.writeFile(fullPath, fixedContent, 'utf-8')
-    } catch (error: any) {
+    // Apply via FileMutationKernel (authoritative file write)
+    const mutationKernel = await getFileMutationKernel(projectId, projectPath)
+    const result = await mutationKernel.apply({
+      changes: [
+        {
+          path: filePath,
+          type: 'modify',
+          fullContent: fixedContent,
+          reason: `Fix build error: ${firstError.message}`,
+        },
+      ],
+      reason: `Fix build error in ${filePath}`,
+    }, {
+      createCheckpoint: true,
+      requireHighConfidence: false,
+    })
+
+    if (!result.success) {
       return NextResponse.json(
-        { error: `Failed to write file ${filePath}: ${error.message}` },
+        { error: result.error || 'Failed to apply file mutation', failedChanges: result.failedChanges },
         { status: 500 }
       )
     }
 
     return NextResponse.json({
       success: true,
-      checkpointId: checkpoint.id,
+      checkpointId: result.checkpointId,
       filePath,
       fixedContent,
     })

@@ -78,6 +78,7 @@ export type WorkspaceEvent =
   | { type: 'RUNTIME_STOPPED'; payload: {} }
   | { type: 'NEW_FILES_CREATED'; payload: { count: number } }
   | { type: 'CURSOR_IDLE'; payload: { filePath: string; duration: number } }
+  | { type: 'WORKSPACE_CHANGED'; payload: { projectId: string; path: string; timestamp: number } } // TASK 8: Workspace change event
   | { type: 'AGENT_OBSERVATION'; payload: { id: string; timestamp: number; message: string; category: string; confidence: number } }
   | { type: 'AGENT_SUGGESTION'; payload: { id: string; timestamp: number; message: string; category: string; confidence: number } }
   | { type: 'AGENT_ACTION_REQUESTED'; payload: { actionType: string } }
@@ -85,6 +86,7 @@ export type WorkspaceEvent =
   | { type: 'AGENT_PLAN_APPROVED'; payload: { planId: string } }
   | { type: 'AGENT_PLAN_STEP_APPROVED'; payload: { planId: string; stepId: string } }
   | { type: 'AGENT_PLAN_STEP_COMPLETED'; payload: { planId: string; stepId: string; result: any } }
+  | { type: 'AGENT_CONFIDENCE_UPDATED'; payload: { confidenceScore: number; confidenceLevel: string; riskLevel: string; reasons: string[]; signalSnapshot: any; timestamp: number } }
 
 /**
  * Workspace Event Bus

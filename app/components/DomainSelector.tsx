@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { FiChevronDown } from 'react-icons/fi'
+import { useRouter } from 'next/navigation'
 
 const domains = [
   { id: 'general', name: 'General', icon: '🧠', description: 'General purpose assistance' },
@@ -22,6 +23,7 @@ interface DomainSelectorProps {
 export default function DomainSelector({ value, onChange }: DomainSelectorProps) {
   const [isOpen, setIsOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
+  const router = useRouter()
 
   const selectedDomain = domains.find(d => d.id === value) || domains[0]
 
@@ -61,7 +63,13 @@ export default function DomainSelector({ value, onChange }: DomainSelectorProps)
               <button
                 key={domain.id}
                 onClick={() => {
-                  onChange(domain.id)
+                  // Navigate to appropriate route
+                  if (domain.id === 'app-generator') {
+                    router.push('/ide/app-generator')
+                  } else {
+                    // Navigate to domain route
+                    router.push(`/domain/${domain.id}`)
+                  }
                   setIsOpen(false)
                 }}
                 className={`w-full flex items-start gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors ${

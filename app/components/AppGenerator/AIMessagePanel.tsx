@@ -45,9 +45,15 @@ interface AIMessagePanelProps {
   onStepApproved?: (planId: string, stepId: string) => void
   onStepRollback?: (planId: string, stepId: string) => void
   onPlanRollback?: (planId: string) => void
+  confidenceReport?: {
+    confidenceScore: number
+    confidenceLevel: 'LOW' | 'MEDIUM' | 'HIGH'
+    riskLevel: 'LOW' | 'MEDIUM' | 'HIGH'
+    reasons: string[]
+  } | null
 }
 
-export default function AIMessagePanel({ messages, isStreaming, onFileClick, onFollowUpAction, onFixAction, onPlanApproved, onStepApproved, onStepRollback, onPlanRollback }: AIMessagePanelProps) {
+export default function AIMessagePanel({ messages, isStreaming, onFileClick, onFollowUpAction, onFixAction, onPlanApproved, onStepApproved, onStepRollback, onPlanRollback, confidenceReport }: AIMessagePanelProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -185,6 +191,52 @@ export default function AIMessagePanel({ messages, isStreaming, onFileClick, onF
                 {/* Plan preview and approval */}
                 {message.plan && (
                   <div className="mt-3 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                    {/* Confidence & Risk Display */}
+                    {confidenceReport && (
+                      <div className="mb-3 pb-3 border-b border-blue-200 dark:border-blue-800">
+                        <div className="flex items-center gap-4 text-xs">
+                          <div className="flex items-center gap-2">
+                            <span className="text-gray-600 dark:text-gray-400">Confidence:</span>
+                            <span className={`font-medium ${
+                              confidenceReport.confidenceLevel === 'HIGH' 
+                                ? 'text-green-600 dark:text-green-400'
+                                : confidenceReport.confidenceLevel === 'MEDIUM'
+                                ? 'text-yellow-600 dark:text-yellow-400'
+                                : 'text-orange-600 dark:text-orange-400'
+                            }`}>
+                              {confidenceReport.confidenceLevel}
+                            </span>
+                            <span className="text-gray-500 dark:text-gray-500">
+                              ({(confidenceReport.confidenceScore * 100).toFixed(0)}%)
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-gray-600 dark:text-gray-400">Risk:</span>
+                            <span className={`font-medium ${
+                              confidenceReport.riskLevel === 'LOW' 
+                                ? 'text-green-600 dark:text-green-400'
+                                : confidenceReport.riskLevel === 'MEDIUM'
+                                ? 'text-yellow-600 dark:text-yellow-400'
+                                : 'text-red-600 dark:text-red-400'
+                            }`}>
+                              {confidenceReport.riskLevel}
+                            </span>
+                          </div>
+                        </div>
+                        {confidenceReport.reasons.length > 0 && (
+                          <details className="mt-2">
+                            <summary className="text-xs text-gray-600 dark:text-gray-400 cursor-pointer hover:text-gray-800 dark:hover:text-gray-200">
+                              Why {confidenceReport.confidenceLevel.toLowerCase()} confidence?
+                            </summary>
+                            <ul className="mt-1 ml-4 text-xs text-gray-600 dark:text-gray-400 space-y-1">
+                              {confidenceReport.reasons.map((reason, i) => (
+                                <li key={i}>• {reason}</li>
+                              ))}
+                            </ul>
+                          </details>
+                        )}
+                      </div>
+                    )}
                     <div className="mb-3">
                       <h4 className="text-sm font-semibold text-blue-700 dark:text-blue-400 mb-1">
                         {message.plan.title}

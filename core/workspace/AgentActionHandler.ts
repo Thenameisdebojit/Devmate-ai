@@ -13,6 +13,7 @@
 
 import { WorkspaceDaemon, WorkspaceEvent, getWorkspaceDaemon } from './WorkspaceDaemon'
 import { AgentPlan, AgentPlanStep } from './AgentPlan'
+import { getAgentConfidenceEngine } from './AgentConfidenceEngine'
 
 export type AgentActionType = 'FIX_BUILD_ERROR'
 
@@ -152,9 +153,25 @@ export class AgentActionHandler {
       payload: { plan },
     } as any)
 
+    // Get confidence context
+    let confidenceContext = ''
+    try {
+      const confidenceEngine = getAgentConfidenceEngine(this.daemon.getState().projectId)
+      const report = confidenceEngine.getCurrentReport()
+      if (report.confidenceLevel === 'HIGH' && report.riskLevel === 'LOW') {
+        confidenceContext = ' This change looks safe based on recent stable builds.'
+      } else if (report.riskLevel === 'HIGH') {
+        confidenceContext = ' There\'s significant risk here — recent build failures detected.'
+      } else if (report.riskLevel === 'MEDIUM') {
+        confidenceContext = ' There\'s some risk here — recent build failures detected.'
+      }
+    } catch {
+      // Confidence engine not available, skip context
+    }
+
     // Emit observation
     this.emitObservation(
-      `[observing] Generated fix plan with ${steps.length} steps. Review and approve to proceed.`
+      `[observing] Generated fix plan with ${steps.length} steps.${confidenceContext} Review and approve to proceed.`
     )
   }
 

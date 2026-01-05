@@ -21,6 +21,7 @@ import { join } from 'path'
 import { promises as fs } from 'fs'
 import archiver from 'archiver'
 import { WorkspaceContextManager, AgentOrchestrator } from '@/lib/appGeneratorAgent'
+import { GenerationController } from '@/lib/runtime/GenerationController'
 
 // Generate project ID (simple implementation - can use uuid library if needed)
 function generateProjectId(): string {
@@ -351,43 +352,166 @@ export async function POST(req: NextRequest) {
               }
             }
 
-            sendStep({
-              step: 2,
-              total: 6,
-              message: 'Application generation completed',
-              status: 'completed'
-            })
+            // Write files to disk for validation
+            const projectPath = join(process.cwd(), 'runtime-projects', workspaceProjectId)
+            await fs.mkdir(projectPath, { recursive: true })
 
-            sendStep({
-              step: 3,
-              total: 6,
-              message: 'Processing generated files...',
-              status: 'in_progress'
-            })
+            // Initialize GenerationController
+            const generationController = new GenerationController(workspaceProjectId, projectPath)
 
-            sendStep({
-              step: 3,
-              total: 6,
-              message: `Processed ${projectData.files?.length || 0} files`,
-              status: 'completed'
-            })
+            // ITERATIVE GENERATION LOOP
+            const MAX_ATTEMPTS = 3
+            let allGeneratedFiles: Array<{ path: string; content: string }> = []
+            let contractSatisfied = false
+            let attempt = 0
 
-            sendStep({
-              step: 4,
-              total: 6,
-              message: 'Validating project structure...',
-              status: 'in_progress'
-            })
+            while (!contractSatisfied && attempt < MAX_ATTEMPTS) {
+              attempt++
 
-            // Ensure we have the required structure
-            if (!projectData.files || !Array.isArray(projectData.files) || projectData.files.length === 0) {
-              throw new Error(`Invalid project structure: No files were generated. ${projectData.error || 'The generation may have failed. Please try again or check the logs.'}`)
+              if (attempt > 1) {
+                sendStep({
+                  step: 2,
+                  total: 7,
+                  message: `Regenerating missing files (attempt ${attempt}/${MAX_ATTEMPTS})...`,
+                  status: 'in_progress'
+                })
+              } else {
+                sendStep({
+                  step: 2,
+                  total: 7,
+                  message: 'Application generation completed',
+                  status: 'completed'
+                })
+              }
+
+              // Write current batch of files to disk
+              const currentFiles = attempt === 1 
+                ? (projectData.files || [])
+                : [] // On subsequent attempts, we'll generate only missing files
+
+              if (currentFiles.length > 0) {
+                for (const file of currentFiles) {
+                  const filePath = join(projectPath, file.path || file)
+                  const dir = join(filePath, '..')
+                  await fs.mkdir(dir, { recursive: true })
+                  await fs.writeFile(filePath, file.content || '', 'utf-8')
+                }
+                allGeneratedFiles = [...allGeneratedFiles, ...currentFiles]
+              }
+
+              sendStep({
+                step: 3,
+                total: 7,
+                message: 'Validating project completeness...',
+                status: 'in_progress'
+              })
+
+              // Validate with GenerationController
+              const validationStatus = await generationController.validateProject()
+
+              // Also validate with Python validator if available
+              let pythonValidation = { isComplete: true, issues: [] as string[], recommendation: '' }
+              try {
+                pythonValidation = await generationController.validateWithPythonValidator(allGeneratedFiles)
+              } catch (error: any) {
+                logger.warn('Python validator unavailable, using GenerationController only')
+              }
+
+              // Contract is satisfied if both validators pass
+              contractSatisfied = validationStatus.complete && pythonValidation.isComplete
+
+              if (!contractSatisfied && attempt < MAX_ATTEMPTS) {
+                // Collect missing artifacts
+                const missingArtifacts = [
+                  ...validationStatus.missingArtifacts,
+                  ...pythonValidation.issues,
+                ]
+
+                sendStep({
+                  step: 3,
+                  total: 7,
+                  message: `Project incomplete. Missing: ${missingArtifacts.slice(0, 3).join(', ')}...`,
+                  status: 'in_progress'
+                })
+
+                // Generate missing files
+                const missingPrompt = `The previous generation was incomplete. Generate ONLY these missing files:
+${missingArtifacts.map(a => `- ${a}`).join('\n')}
+
+Do NOT regenerate existing files. Only create the missing files listed above.
+Ensure each file is complete and functional.`
+
+                try {
+                  const { generateAppDirect } = await import('@/lib/appGenerator')
+                  const missingProject = await generateAppDirect(missingPrompt)
+                  
+                  // Add missing files to collection
+                  if (missingProject.files && Array.isArray(missingProject.files)) {
+                    // Filter to only add files that match missing artifacts
+                    const newFiles = missingProject.files.filter((f: any) => {
+                      const path = f.path || f
+                      return missingArtifacts.some(missing => 
+                        path.includes(missing.toLowerCase().replace(/\s+/g, '')) ||
+                        path.includes('package.json') ||
+                        path.includes('README.md') ||
+                        path.includes('index.') ||
+                        path.includes('tsconfig') ||
+                        path.includes('vite.config') ||
+                        path.includes('next.config')
+                      )
+                    })
+                    
+                    allGeneratedFiles = [...allGeneratedFiles, ...newFiles]
+                    
+                    // Write new files to disk
+                    for (const file of newFiles) {
+                      const filePath = join(projectPath, file.path || file)
+                      const dir = join(filePath, '..')
+                      await fs.mkdir(dir, { recursive: true })
+                      await fs.writeFile(filePath, file.content || '', 'utf-8')
+                    }
+                  }
+                } catch (error: any) {
+                  logger.error('Failed to generate missing files:', error)
+                  // Continue to next attempt
+                }
+              }
             }
 
-            // Update workspace context with generated files
-            // AGENT RULE: All file operations must be traceable through workspace context
-            if (projectData.files && Array.isArray(projectData.files)) {
-              for (const file of projectData.files) {
+            // Final validation
+            const finalStatus = await generationController.validateProject()
+            const finalPythonValidation = await generationController.validateWithPythonValidator(allGeneratedFiles).catch(() => ({
+              isComplete: true,
+              issues: [],
+              recommendation: 'Python validator unavailable',
+            }))
+
+            const isComplete = finalStatus.complete && finalPythonValidation.isComplete
+
+            if (!isComplete) {
+              // Generation failed after max attempts
+              const allIssues = [
+                ...finalStatus.issues,
+                ...finalStatus.missingArtifacts,
+                ...finalPythonValidation.issues,
+              ]
+
+              throw new Error(
+                `Generation incomplete after ${MAX_ATTEMPTS} attempts. Missing: ${allIssues.join(', ')}. ` +
+                `Generated ${finalStatus.fileCount} files, need at least ${finalStatus.requiredMinimum}.`
+              )
+            }
+
+            sendStep({
+              step: 3,
+              total: 7,
+              message: `Project validated: ${finalStatus.fileCount} files, ${finalStatus.sourceFileCount} source files`,
+              status: 'completed'
+            })
+
+            // Update workspace context with all generated files
+            if (allGeneratedFiles.length > 0) {
+              for (const file of allGeneratedFiles) {
                 workspaceContext.updateFromToolResult(
                   'generate_app',
                   'write',
@@ -395,7 +519,7 @@ export async function POST(req: NextRequest) {
                   file.content
                 )
               }
-              logger.info(`Updated workspace context with ${projectData.files.length} files`)
+              logger.info(`Updated workspace context with ${allGeneratedFiles.length} files`)
             }
 
             // Convert to expected format
@@ -403,7 +527,7 @@ export async function POST(req: NextRequest) {
               projectName: projectData.projectName || 'generated-project',
               framework: projectData.framework || 'Next.js',
               description: projectData.description || prompt.substring(0, 100),
-              files: projectData.files.map((f: any) => ({
+              files: allGeneratedFiles.map((f: any) => ({
                 path: f.path || f,
                 content: f.content || ''
               })),
@@ -412,34 +536,35 @@ export async function POST(req: NextRequest) {
               workspaceMetadata: {
                 projectId: workspaceProjectId,
                 checkpointId,
-                fileCount: projectData.files?.length || 0,
+                fileCount: allGeneratedFiles.length,
+                generationComplete: true, // Backend authority: generation is complete
               }
             }
 
             sendStep({
               step: 4,
-              total: 6,
+              total: 7,
               message: 'Project structure validated',
               status: 'completed'
             })
 
             sendStep({
               step: 5,
-              total: 6,
+              total: 7,
               message: 'Preparing download package...',
               status: 'in_progress'
             })
 
             sendStep({
               step: 5,
-              total: 6,
+              total: 7,
               message: 'Package ready',
               status: 'completed'
             })
 
             sendStep({
               step: 6,
-              total: 6,
+              total: 7,
               message: 'Generation complete!',
               status: 'completed'
             })

@@ -24,6 +24,24 @@ export default function Terminal({ projectId, onReady }: TerminalProps) {
     // Dynamically load xterm.js
     let cleanupFn: (() => void) | null = null
 
+    // Listen for new terminal requests
+    const handleNewTerminal = (event: CustomEvent) => {
+      if (event.detail.projectId === projectId) {
+        // Reconnect terminal
+        eventSourceRef.current?.close()
+        if (xtermInstanceRef.current) {
+          xtermInstanceRef.current.dispose()
+        }
+        xtermInstanceRef.current = null
+        fitAddonRef.current = null
+        setIsLoading(true)
+        setIsConnected(false)
+        // Reinitialize
+        setTimeout(() => initTerminal(), 100)
+      }
+    }
+    window.addEventListener('terminal-new', handleNewTerminal as EventListener)
+
     const initTerminal = async () => {
       try {
         const [{ Terminal }, { FitAddon }] = await Promise.all([
@@ -57,8 +75,8 @@ export default function Terminal({ projectId, onReady }: TerminalProps) {
         fitAddonRef.current = fitAddon
         setIsLoading(false)
 
-        // Connect to terminal stream
-        const eventSource = new EventSource(`/api/runtime/terminal/attach?projectId=${projectId}`)
+        // Connect to local terminal stream (works without Docker containers)
+        const eventSource = new EventSource(`/api/terminal/local?projectId=${projectId}`)
         eventSourceRef.current = eventSource
 
         eventSource.onmessage = (event) => {
@@ -84,8 +102,8 @@ export default function Terminal({ projectId, onReady }: TerminalProps) {
 
         // Handle terminal input
         xterm.onData((data: string) => {
-          // Send input to server
-          fetch('/api/runtime/terminal/attach', {
+          // Send input to local terminal server
+          fetch('/api/terminal/local', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ projectId, input: data }),
@@ -97,6 +115,20 @@ export default function Terminal({ projectId, onReady }: TerminalProps) {
         // Handle resize
         const handleResize = () => {
           fitAddon.fit()
+          // Send resize to local terminal server
+          const dimensions = fitAddon.proposeDimensions()
+          if (dimensions) {
+            fetch('/api/terminal/local', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ 
+                projectId, 
+                resize: { cols: dimensions.cols, rows: dimensions.rows } 
+              }),
+            }).catch((error) => {
+              console.error('Failed to send resize:', error)
+            })
+          }
         }
         window.addEventListener('resize', handleResize)
 
@@ -116,6 +148,7 @@ export default function Terminal({ projectId, onReady }: TerminalProps) {
 
     return () => {
       mounted = false
+      window.removeEventListener('terminal-new', handleNewTerminal as EventListener)
       eventSourceRef.current?.close()
       if (xtermInstanceRef.current) {
         xtermInstanceRef.current.dispose()

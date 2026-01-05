@@ -15,7 +15,7 @@ import { promises as fs } from 'fs'
 import { nanoid } from 'nanoid'
 import { checkpointEngine } from './checkpointEngine'
 import { safetyManager } from './safetyManager'
-import { getWorkspaceDaemon } from '@/core/workspace'
+import { WorkspaceRegistry } from '@/lib/workspace/WorkspaceRegistry'
 
 const execAsync = promisify(exec)
 
@@ -207,8 +207,8 @@ export class ContainerManager {
       } catch (buildError: any) {
         // Dispatch BUILD_FAILED event to WorkspaceDaemon
         try {
-          const daemon = getWorkspaceDaemon(config.projectId)
-          daemon.dispatch({
+          const workspace = WorkspaceRegistry.get(config.projectId)
+          workspace.dispatch({
             type: 'BUILD_FAILED',
             payload: {
               errors: [
@@ -221,7 +221,7 @@ export class ContainerManager {
             },
           })
         } catch (daemonError) {
-          // If daemon dispatch fails, log but don't block error handling
+          // If workspace dispatch fails, log but don't block error handling
           console.warn('Failed to dispatch BUILD_FAILED event:', daemonError)
         }
         // Re-throw to be caught by outer catch block
@@ -385,8 +385,8 @@ CMD ${framework.startCommand || 'npm start'}`
           this.containers.set(projectId, status)
           
           try {
-            const daemon = getWorkspaceDaemon(projectId)
-            daemon.dispatch({
+            const workspace = WorkspaceRegistry.get(projectId)
+            workspace.dispatch({
               type: 'RUNTIME_CRASHED',
               payload: {
                 error: `Container exited unexpectedly with code ${exitCode}`,

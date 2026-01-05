@@ -1,11 +1,12 @@
 /**
  * Runtime API: Preview URL
  * 
- * Returns the preview URL for a running container.
+ * Returns preview URL from RuntimeKernel state (authoritative).
+ * Preview is a child of runtime - only exists when runtime running.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { containerManager } from '@/lib/runtime/containerManager'
+import { RuntimeKernel } from '@/lib/runtime/runtimeKernel'
 
 export const runtime = 'nodejs'
 
@@ -21,25 +22,29 @@ export async function GET(req: NextRequest) {
       )
     }
 
-    const status = containerManager.getContainerStatus(projectId)
+    // Get authoritative state from kernel
+    const kernel = RuntimeKernel.get(projectId)
+    const state = kernel.getState()
 
-    if (!status) {
+    // Preview only exists when runtime is running
+    if (state.status !== 'running') {
       return NextResponse.json(
-        { error: 'Container not found' },
-        { status: 404 }
-      )
-    }
-
-    if (status.status !== 'running') {
-      return NextResponse.json(
-        { error: 'Container is not running' },
+        { error: 'Runtime is not running' },
         { status: 400 }
       )
     }
 
+    if (!state.previewUrl) {
+      return NextResponse.json(
+        { error: 'Preview not available yet' },
+        { status: 404 }
+      )
+    }
+
     return NextResponse.json({
-      url: status.previewUrl,
-      port: status.port,
+      url: state.previewUrl,
+      port: state.previewPort,
+      status: state.previewStatus,
     })
   } catch (error: any) {
     console.error('Preview URL error:', error)

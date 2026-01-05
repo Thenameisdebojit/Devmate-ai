@@ -44,3 +44,10 @@ export {
   destroyAgentPlanExecutor,
 } from './AgentPlanExecutor'
 
+export {
+  AgentConfidenceEngine,
+  getAgentConfidenceEngine,
+  destroyAgentConfidenceEngine,
+  type ConfidenceReport,
+} from './AgentConfidenceEngine'
+

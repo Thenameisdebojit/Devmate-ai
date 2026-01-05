@@ -12,6 +12,7 @@
 
 import { WorkspaceDaemon, getWorkspaceDaemon } from './WorkspaceDaemon'
 import { AgentPlan, AgentPlanStep, PlanExecutionContext } from './AgentPlan'
+import { getAgentConfidenceEngine } from './AgentConfidenceEngine'
 
 export class AgentPlanExecutor {
   private daemon: WorkspaceDaemon
@@ -82,7 +83,21 @@ export class AgentPlanExecutor {
     if (!nextStep) {
       // All steps completed
       plan.status = 'completed'
-      this.emitObservation(`[observing] Plan "${plan.title}" completed successfully.`)
+      // Get confidence context
+      let confidenceContext = ''
+      try {
+        const confidenceEngine = getAgentConfidenceEngine(this.projectId)
+        const report = confidenceEngine.getCurrentReport()
+        if (report.confidenceLevel === 'HIGH' && report.riskLevel === 'LOW') {
+          confidenceContext = ' Runtime is stable with consistent builds.'
+        } else if (report.riskLevel === 'HIGH') {
+          confidenceContext = ' Note: Recent build failures detected — monitor closely.'
+        }
+      } catch {
+        // Confidence engine not available, skip context
+      }
+
+      this.emitObservation(`[observing] Plan "${plan.title}" completed successfully.${confidenceContext}`)
       return
     }
 
@@ -217,8 +232,11 @@ export class AgentPlanExecutor {
 
   /**
    * Execute PATCH_FILE action
+   * Uses API route to apply file mutations via FileMutationKernel (server-side)
    */
   private async executePatchFile(filePath: string, parameters?: Record<string, any>): Promise<any> {
+    // Call API route that handles file mutation on server side
+    // This avoids importing 'fs' in client-side code
     const response = await fetch('/api/runtime/fix-build-error', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -241,16 +259,21 @@ export class AgentPlanExecutor {
 
     const result = await response.json()
 
-    // Dispatch FILE_CHANGED event
-    this.daemon.dispatch({
+    // Dispatch FILE_CHANGED event for UI
+    this.daemon.getEventBus().emit({
       type: 'FILE_CHANGED',
       payload: {
         path: result.filePath,
         content: result.fixedContent,
       },
-    })
+    } as any)
 
-    return result
+    return {
+      success: true,
+      filePath: result.filePath,
+      fixedContent: result.fixedContent,
+      checkpointId: result.checkpointId,
+    }
   }
 
   /**
@@ -349,6 +372,9 @@ export class AgentPlanExecutor {
 const executorInstances = new Map<string, AgentPlanExecutor>()
 
 export function getAgentPlanExecutor(projectId: string): AgentPlanExecutor {
+  // NOTE: For backward compatibility with client components, we use getWorkspaceDaemon
+  // Server-side code should use WorkspaceRegistry.get() directly when possible
+  // This ensures client components can still use this function for event subscriptions
   const daemon = getWorkspaceDaemon(projectId)
 
   if (!executorInstances.has(projectId)) {

@@ -12,6 +12,7 @@
  */
 
 import { WorkspaceDaemon, WorkspaceEvent, WorkspaceState, IntentState, getWorkspaceDaemon } from './WorkspaceDaemon'
+import { getAgentConfidenceEngine } from './AgentConfidenceEngine'
 
 export interface AgentObservation {
   id: string
@@ -177,13 +178,27 @@ export class AgentObserver {
         if (this.consecutiveBuildFailures >= 2 && !this.suggestionEmitted) {
           this.suggestionEmitted = true
           
+          // Get confidence context to reference in message
+          let confidenceContext = ''
+          try {
+            const confidenceEngine = getAgentConfidenceEngine(this.daemon.getState().projectId)
+            const report = confidenceEngine.getCurrentReport()
+            if (report.riskLevel === 'HIGH') {
+              confidenceContext = ' There\'s significant risk here — recent build failures detected.'
+            } else if (report.riskLevel === 'MEDIUM') {
+              confidenceContext = ' There\'s some risk here — recent build failures detected.'
+            }
+          } catch {
+            // Confidence engine not available, skip context
+          }
+          
           // Emit suggestion event (distinct from observation)
           this.daemon.getEventBus().emit({
             type: 'AGENT_SUGGESTION',
             payload: {
               id: `suggestion-${Date.now()}-${Math.random()}`,
               timestamp: Date.now(),
-              message: '[suggestion] The build failed twice in a row. I can investigate the error and propose a fix if you want.',
+              message: `[suggestion] The build failed twice in a row.${confidenceContext} I can investigate the error and propose a fix if you want.`,
               category: 'build-fix',
               confidence: 0.85,
             },
