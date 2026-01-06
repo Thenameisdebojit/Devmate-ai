@@ -121,7 +121,7 @@ export default function DomainPage() {
     if (previousDomainRef.current && previousDomainRef.current !== mappedDomain) {
       console.log(`[DomainSwitch] IMMEDIATE CLEAR - switching from ${previousDomainRef.current} to ${mappedDomain}`)
       
-      // Mark that we're switching domains to prevent chat reload
+      // Mark that we're switching domains to prevent chat reload and auto-save
       isDomainSwitchingRef.current = true
       setIsDomainSwitching(true) // Show blank page immediately
       
@@ -130,25 +130,8 @@ export default function DomainPage() {
       const previousChatId = currentChatId
       const previousDomain = previousDomainRef.current
       
-      // STEP 2: IMMEDIATELY clear messages and reset chat ID - start fresh session
-      clearMessages()
-      setMessages([]) // Force clear messages array
-      setCurrentChatId(null) // Clear chat ID immediately
-      
-      // STEP 3: Remove chatId from URL if present (do this BEFORE updating domain)
-      const currentChatIdParam = searchParams.get('chatId')
-      if (currentChatIdParam) {
-        // Use router.replace to remove chatId from URL immediately
-        router.replace(`/domain/${domainId}`, { scroll: false })
-      }
-      
-      // STEP 4: Update domain state and ref
-      setDomain(mappedDomain)
-      previousDomainRef.current = mappedDomain
-      
-      // STEP 5: Save previous chat in background ONCE (only if not already saved)
-      if (isAuthenticated && previousMessages.length > 0 && previousChatId) {
-        // Only save if we have a chatId (existing chat), don't create duplicates
+      // STEP 2: Save previous chat BEFORE clearing (to prevent duplicates)
+      if (isAuthenticated && previousMessages.length > 0) {
         (async () => {
           try {
             const validMessages = previousMessages.filter((m) => m.content && m.content.trim().length > 0)
@@ -156,19 +139,48 @@ export default function DomainPage() {
               const firstUserMessage = validMessages.find((m) => m.type === 'user')
               const title = firstUserMessage?.content.substring(0, 50) || 'New Chat'
 
-              // Use PUT to update existing chat, not create new one
-              await fetch(`/api/chats/${previousChatId}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ title, messages: validMessages, domain: previousDomain || 'general' }),
-              })
-              console.log(`[DomainSwitch] Saved chat from previous domain: ${previousDomain}`)
+              if (previousChatId) {
+                // Update existing chat with previous domain
+                await fetch(`/api/chats/${previousChatId}`, {
+                  method: 'PUT',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ title, messages: validMessages, domain: previousDomain || 'general' }),
+                })
+                console.log(`[DomainSwitch] Updated chat ${previousChatId} with domain: ${previousDomain}`)
+              } else {
+                // Create new chat for previous domain (if no chatId exists)
+                const response = await fetch('/api/chats', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ title, messages: validMessages, domain: previousDomain || 'general' }),
+                })
+                if (response.ok) {
+                  const data = await response.json()
+                  console.log(`[DomainSwitch] Created new chat ${data.chat._id} for domain: ${previousDomain}`)
+                }
+              }
             }
           } catch (error) {
             console.error('[DomainSwitch] Failed to save chat on domain change:', error)
           }
         })()
       }
+      
+      // STEP 3: IMMEDIATELY clear messages and reset chat ID - start fresh session
+      clearMessages()
+      setMessages([]) // Force clear messages array
+      setCurrentChatId(null) // Clear chat ID immediately - new domain gets new chat ID
+      
+      // STEP 4: Remove chatId from URL if present (do this BEFORE updating domain)
+      const currentChatIdParam = searchParams.get('chatId')
+      if (currentChatIdParam) {
+        // Use router.replace to remove chatId from URL immediately
+        router.replace(`/domain/${domainId}`, { scroll: false })
+      }
+      
+      // STEP 5: Update domain state and ref
+      setDomain(mappedDomain)
+      previousDomainRef.current = mappedDomain
       
       // STEP 6: Reset domain switching flag after a short delay to allow router.replace to complete
       setTimeout(() => {
@@ -282,13 +294,19 @@ export default function DomainPage() {
   }, [messages, isAuthenticated, saveCurrentChat, isDomainSwitching])
 
   const handleNewChat = async () => {
-    // Save current chat before clearing
-    if (isAuthenticated && messages.length > 0 && !currentChatId) {
+    // Save current chat before clearing (with current domain)
+    if (isAuthenticated && messages.length > 0) {
       await saveCurrentChat()
     }
+    // Clear messages and chat ID to start fresh session
     clearMessages()
+    setMessages([])
     setCurrentChatId(null)
-    router.push(`/domain/${domainId}`)
+    // Remove chatId from URL if present
+    const currentChatIdParam = searchParams.get('chatId')
+    if (currentChatIdParam) {
+      router.replace(`/domain/${domainId}`, { scroll: false })
+    }
   }
 
   // Map domain ID for display

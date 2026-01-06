@@ -58,6 +58,19 @@ export default function IDECodePlayground({
       const workspaceRoot = projectId ? `runtime-projects/${projectId}` : '.'
 
       switch (ext) {
+        case 'html':
+        case 'htm':
+          // Open HTML file in browser using preview endpoint
+          if (projectId) {
+            const previewUrl = `${window.location.origin}/api/runtime/file/preview?projectId=${projectId}&path=${encodeURIComponent(filePath)}`
+            window.open(previewUrl, '_blank', 'noopener,noreferrer')
+            setIsRunning(false)
+            return
+          } else {
+            alert('Project ID is required to preview HTML files')
+            setIsRunning(false)
+            return
+          }
         case 'js':
         case 'mjs':
           command = `cd "${workspaceRoot}" && node "${filePath}"`
