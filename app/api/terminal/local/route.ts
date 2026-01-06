@@ -40,12 +40,27 @@ export async function GET(req: NextRequest) {
     // Determine shell based on OS
     const isWindows = process.platform === 'win32'
     const shell = isWindows ? 'powershell.exe' : '/bin/bash'
-    const shellArgs = isWindows ? ['-NoExit', '-Command', ''] : []
+    const shellArgs = isWindows ? ['-NoLogo', '-NoExit'] : ['-l'] // -l for login shell on Unix
 
-    // Spawn local shell process
+    // Get workspace root if projectId provided
+    let workspaceRoot = process.cwd()
+    if (projectId) {
+      workspaceRoot = join(process.cwd(), 'runtime-projects', projectId)
+      // Ensure directory exists
+      try {
+        await fs.mkdir(workspaceRoot, { recursive: true })
+      } catch (error) {
+        console.warn(`Failed to create workspace directory: ${workspaceRoot}`, error)
+      }
+    }
+
+    // Spawn local shell process with proper working directory
     const terminalProcess = spawn(shell, shellArgs, {
-      cwd: process.cwd(),
-      env: process.env,
+      cwd: workspaceRoot,
+      env: {
+        ...process.env,
+        TERM: 'xterm-256color',
+      },
       stdio: ['pipe', 'pipe', 'pipe'],
       shell: false,
     })

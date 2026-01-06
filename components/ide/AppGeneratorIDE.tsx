@@ -19,8 +19,8 @@ import DomainSwitcher from './DomainSwitcher'
 import IDEHeader from './IDEHeader'
 import IDEMenuBar from './IDEMenuBar'
 import IDESidebar from './IDESidebar'
-import IDEEditor, { IDEEditorRef } from './IDEEditor'
-import IDETerminal from './IDETerminal'
+import IDECodePlayground from './IDECodePlayground'
+import IDETerminalPanel from './IDETerminalPanel'
 import IDEChat from './IDEChat'
 import IDERuntimeControls from './IDERuntimeControls'
 import ThemeToggle from '@/app/components/ThemeToggle'
@@ -41,14 +41,13 @@ export default function AppGeneratorIDE({ projectId: initialProjectId }: AppGene
   const [aiMessages, setAiMessages] = useState<any[]>([])
   const [workspaceInitialized, setWorkspaceInitialized] = useState(false) // TASK 2: Track initialization
   const [showSidebar, setShowSidebar] = useState(true)
-  const [showTerminal, setShowTerminal] = useState(true)
+  const [showTerminal, setShowTerminal] = useState(false) // Terminal hidden by default
   const [showExplorer, setShowExplorer] = useState(true)
   const [showSearch, setShowSearch] = useState(false)
   const [showProblems, setShowProblems] = useState(false)
   const [showOutput, setShowOutput] = useState(false)
   const [showDebugConsole, setShowDebugConsole] = useState(false)
   const [wordWrap, setWordWrap] = useState(false)
-  const editorRef = useRef<IDEEditorRef>(null)
 
   // TASK 2: Workspace Bootstrap - Initialize workspace on mount
   useEffect(() => {
@@ -544,7 +543,7 @@ export default function AppGeneratorIDE({ projectId: initialProjectId }: AppGene
 
   const handleNewTerminal = useCallback(() => {
     setShowTerminal(true)
-    // Force terminal to reconnect by dispatching event
+    // Dispatch event to create new terminal
     window.dispatchEvent(new CustomEvent('terminal-new', { detail: { projectId } }))
   }, [projectId])
 
@@ -585,13 +584,15 @@ export default function AppGeneratorIDE({ projectId: initialProjectId }: AppGene
         onSave={handleSave}
         onSaveAs={handleSaveAs}
         onClose={handleClose}
-        onUndo={() => editorRef.current?.undo()}
-        onRedo={() => editorRef.current?.redo()}
-        onCut={() => editorRef.current?.cut()}
-        onCopy={() => editorRef.current?.copy()}
-        onPaste={() => editorRef.current?.paste()}
-        onFind={() => editorRef.current?.find()}
-        onReplace={() => editorRef.current?.replace()}
+        onUndo={() => {
+          // Editor operations handled by IDECodePlayground
+        }}
+        onRedo={() => {}}
+        onCut={() => {}}
+        onCopy={() => {}}
+        onPaste={() => {}}
+        onFind={() => {}}
+        onReplace={() => {}}
         onFindInFiles={() => setShowSearch(true)}
         onGoToFile={handleGoToFile}
         onGoToSymbol={() => handleCommandPalette()}
@@ -627,25 +628,25 @@ export default function AppGeneratorIDE({ projectId: initialProjectId }: AppGene
           />
         )}
 
-        {/* Center: Editor */}
+        {/* Center: Code Playground with Editor */}
         <div className="flex-1 flex flex-col min-w-0">
-          <IDEEditor
-            ref={editorRef}
+          <IDECodePlayground
+            projectId={projectId}
             filePath={activeFile}
             content={fileContent}
             onSave={(content) => activeFile && handleFileSave(activeFile, content)}
             onChange={setFileContent}
+            onRun={(filePath, mode) => {
+              // Dispatch command to terminal
+              window.dispatchEvent(new CustomEvent('terminal-command', {
+                detail: { projectId, filePath, mode },
+              }))
+            }}
           />
         </div>
 
-        {/* Right Sidebar: Terminal, Chat, Runtime */}
+        {/* Right Sidebar: Chat, Runtime */}
         <div className="w-96 flex-shrink-0 flex flex-col border-l border-gray-200 dark:border-gray-800">
-          {/* Terminal */}
-          <IDETerminal
-            projectId={projectId}
-            className="h-64 flex-shrink-0 border-b border-gray-200 dark:border-gray-800"
-          />
-
           {/* AI Chat */}
           <IDEChat
             messages={aiMessages}
@@ -654,7 +655,7 @@ export default function AppGeneratorIDE({ projectId: initialProjectId }: AppGene
             onPlanApproved={handlePlanApproved}
             onStepApproved={handleStepApproved}
             className="flex-1 min-h-0"
-            disabled={!workspaceInitialized} // TASK 2: Disable until workspace initialized
+            disabled={!workspaceInitialized}
           />
 
           {/* Runtime Controls */}
@@ -665,6 +666,13 @@ export default function AppGeneratorIDE({ projectId: initialProjectId }: AppGene
           />
         </div>
       </div>
+
+      {/* Terminal Panel (Bottom) */}
+      <IDETerminalPanel
+        projectId={projectId}
+        isVisible={showTerminal}
+        onClose={() => setShowTerminal(false)}
+      />
     </div>
   )
 }

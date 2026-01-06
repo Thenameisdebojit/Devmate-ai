@@ -44,6 +44,7 @@ export default function DomainPage() {
   const [showAuthModal, setShowAuthModal] = useState(false)
   const [showSettingsModal, setShowSettingsModal] = useState(false)
   const [currentChatId, setCurrentChatId] = useState<string | null>(searchParams.get('chatId'))
+  const [isDomainSwitching, setIsDomainSwitching] = useState(false) // Track domain switching state for UI
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const previousDomainRef = useRef<string | null>(null)
   const isInitialMount = useRef(true)
@@ -122,6 +123,7 @@ export default function DomainPage() {
       
       // Mark that we're switching domains to prevent chat reload
       isDomainSwitchingRef.current = true
+      setIsDomainSwitching(true) // Show blank page immediately
       
       // STEP 1: Capture messages BEFORE clearing (use ref to get current value)
       const previousMessages = [...messagesRef.current] // Copy messages array from ref before clearing
@@ -172,6 +174,7 @@ export default function DomainPage() {
       // STEP 6: Reset domain switching flag after a short delay to allow router.replace to complete
       setTimeout(() => {
         isDomainSwitchingRef.current = false
+        setIsDomainSwitching(false) // Hide blank page transition state
       }, 100)
     } else {
       // Domain didn't change, just update domain state
@@ -315,7 +318,22 @@ export default function DomainPage() {
           {/* Main Content */}
           <div className="flex-1 overflow-y-auto">
             <div className="max-w-6xl mx-auto px-4 py-6">
-              {isAcademic ? (
+              {isDomainSwitching || (messages.length === 0 && !currentChatId) ? (
+                // Show blank page during domain switch or when starting fresh
+                <div className="flex flex-col items-center justify-center h-full text-center px-4 max-w-3xl mx-auto min-h-[60vh]">
+                  <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center mb-6 shadow-2xl shadow-indigo-500/20">
+                    <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+                    </svg>
+                  </div>
+                  <h3 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white mb-3">
+                    {isDomainSwitching ? 'Switching domain...' : 'What can I help you build today?'}
+                  </h3>
+                  <p className="text-gray-600 dark:text-gray-400 max-w-md text-base leading-relaxed">
+                    {isDomainSwitching ? 'Starting a new chat session...' : 'Ask me to generate code, explain concepts, or help debug your projects.'}
+                  </p>
+                </div>
+              ) : isAcademic ? (
                 <Suspense fallback={<div className="flex items-center justify-center h-full"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div></div>}>
                   <ResearchPanel />
                 </Suspense>
