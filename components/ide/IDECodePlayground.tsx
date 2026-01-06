@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef } from 'react'
-import { FiPlay, FiSquare, FiBug } from 'react-icons/fi'
+import { FiPlay, FiSquare, FiCode } from 'react-icons/fi'
 import dynamic from 'next/dynamic'
 
 const MonacoEditor = dynamic(() => import('@monaco-editor/react'), { ssr: false })
@@ -170,7 +170,7 @@ export default function IDECodePlayground({
                 className="px-3 py-1 text-xs font-medium bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
                 title="Debug (F5)"
               >
-                <FiBug className="w-3 h-3" />
+                <FiCode className="w-3 h-3" />
                 Debug
               </button>
               {isRunning && (
