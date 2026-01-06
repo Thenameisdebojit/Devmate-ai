@@ -139,27 +139,26 @@ export default function DomainPage() {
       const currentChatIdParam = searchParams.get('chatId')
       if (currentChatIdParam) {
         // Use router.replace to remove chatId from URL immediately
-        router.replace(`/domain/${domainId}`)
+        router.replace(`/domain/${domainId}`, { scroll: false })
       }
       
       // STEP 4: Update domain state and ref
       setDomain(mappedDomain)
       previousDomainRef.current = mappedDomain
       
-      // STEP 5: Save previous chat in background (after clearing)
-      if (isAuthenticated && previousMessages.length > 0) {
-        // Save asynchronously without blocking UI
+      // STEP 5: Save previous chat in background ONCE (only if not already saved)
+      if (isAuthenticated && previousMessages.length > 0 && previousChatId) {
+        // Only save if we have a chatId (existing chat), don't create duplicates
         (async () => {
           try {
             const validMessages = previousMessages.filter((m) => m.content && m.content.trim().length > 0)
             if (validMessages.length > 0) {
               const firstUserMessage = validMessages.find((m) => m.type === 'user')
               const title = firstUserMessage?.content.substring(0, 50) || 'New Chat'
-              const endpoint = previousChatId ? `/api/chats/${previousChatId}` : '/api/chats'
-              const method = previousChatId ? 'PUT' : 'POST'
 
-              await fetch(endpoint, {
-                method,
+              // Use PUT to update existing chat, not create new one
+              await fetch(`/api/chats/${previousChatId}`, {
+                method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ title, messages: validMessages, domain: previousDomain || 'general' }),
               })
@@ -175,7 +174,7 @@ export default function DomainPage() {
       setTimeout(() => {
         isDomainSwitchingRef.current = false
         setIsDomainSwitching(false) // Hide blank page transition state
-      }, 100)
+      }, 300) // Increased delay to ensure URL update completes
     } else {
       // Domain didn't change, just update domain state
       setDomain(mappedDomain)
@@ -258,8 +257,13 @@ export default function DomainPage() {
     }
   }, [searchParams, currentChatId, handleLoadChat])
 
-  // Auto-save chat when messages change
+  // Auto-save chat when messages change (but NOT during domain switch)
   useEffect(() => {
+    // Don't auto-save during domain switch
+    if (isDomainSwitchingRef.current || isDomainSwitching) {
+      return
+    }
+    
     if (isAuthenticated && messages.length > 0) {
       if (saveTimeoutRef.current) {
         clearTimeout(saveTimeoutRef.current)
@@ -275,7 +279,7 @@ export default function DomainPage() {
         clearTimeout(saveTimeoutRef.current)
       }
     }
-  }, [messages, isAuthenticated, saveCurrentChat])
+  }, [messages, isAuthenticated, saveCurrentChat, isDomainSwitching])
 
   const handleNewChat = async () => {
     // Save current chat before clearing

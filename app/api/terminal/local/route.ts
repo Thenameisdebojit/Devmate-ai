@@ -8,6 +8,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { spawn, ChildProcess } from 'child_process'
 import { EventEmitter } from 'events'
+import { join } from 'path'
+import { promises as fs } from 'fs'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
@@ -36,7 +38,7 @@ export async function GET(req: NextRequest) {
   // Get or create terminal session
   let session = terminalSessions.get(projectId)
   
-  if (!session || session.process.killed) {
+  if (!session || session.process.killed || !session.process.stdin?.writable) {
     // Determine shell based on OS
     const isWindows = process.platform === 'win32'
     const shell = isWindows ? 'powershell.exe' : '/bin/bash'

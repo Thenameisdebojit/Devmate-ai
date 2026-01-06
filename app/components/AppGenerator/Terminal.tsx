@@ -95,9 +95,14 @@ export default function Terminal({ projectId, onReady }: TerminalProps) {
           }
         }
 
-        eventSource.onerror = () => {
+        eventSource.onerror = (error) => {
+          console.error('Terminal connection error:', error)
           setIsConnected(false)
-          xterm.write('\r\n\x1b[31mConnection lost. Reconnecting...\x1b[0m\r\n')
+          // Don't show reconnecting message if it's a connection error - let it fail gracefully
+          if (eventSource.readyState === EventSource.CLOSED) {
+            xterm.write('\r\n\x1b[31mConnection closed. Please refresh to reconnect.\x1b[0m\r\n')
+            eventSource.close()
+          }
         }
 
         // Handle terminal input

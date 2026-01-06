@@ -65,6 +65,7 @@ export async function POST(req: NextRequest) {
     // Process files in batches to handle large folders
     const BATCH_SIZE = 50
     const fileChanges: Array<{ type: 'create'; path: string; fullContent: string }> = []
+    let totalUploaded = 0 // Track total files uploaded
     
     for (let batchStart = 0; batchStart < files.length; batchStart += BATCH_SIZE) {
       const batchEnd = Math.min(batchStart + BATCH_SIZE, files.length)
@@ -119,7 +120,9 @@ export async function POST(req: NextRequest) {
           description: `Uploaded batch of ${batchChanges.length} files`,
         })
 
-        if (!result.success) {
+        if (result.success) {
+          totalUploaded += batchChanges.length
+        } else {
           console.warn(`Failed to write some files in batch:`, result.failedChanges)
         }
       }
@@ -132,7 +135,9 @@ export async function POST(req: NextRequest) {
         description: `Uploaded final batch of ${fileChanges.length} files`,
       })
 
-      if (!result.success) {
+      if (result.success) {
+        totalUploaded += fileChanges.length
+      } else {
         return NextResponse.json(
           { 
             error: 'Failed to write some files',

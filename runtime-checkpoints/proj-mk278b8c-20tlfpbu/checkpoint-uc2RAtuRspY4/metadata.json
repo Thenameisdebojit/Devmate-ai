@@ -1,0 +1,13 @@
+{
+  "id": "checkpoint-uc2RAtuRspY4",
+  "projectId": "proj-mk278b8c-20tlfpbu",
+  "timestamp": 1767680407793,
+  "description": "File mutation: undefined",
+  "type": "pre-write",
+  "files": [],
+  "metadata": {
+    "trigger": "pre-write",
+    "fileCount": 0,
+    "totalSize": 0
+  }
+}
