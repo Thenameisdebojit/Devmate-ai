@@ -26,6 +26,7 @@ import IDERuntimeControls from './IDERuntimeControls'
 import IDEActivityBar from './IDEActivityBar'
 import IDESourceControl from './IDESourceControl'
 import IDEResizablePanel from './IDEResizablePanel'
+import IDESettingsPanel, { type EditorSettings } from './IDESettingsPanel'
 import ThemeToggle from '@/app/components/ThemeToggle'
 import { getWorkspaceDaemon as getCoreWorkspaceDaemon, getAgentObserver, getAgentActionHandler, getAgentPlanExecutor, getAgentConfidenceEngine, type AgentPlan } from '@/core/workspace'
 
@@ -55,6 +56,37 @@ export default function AppGeneratorIDE({ projectId: initialProjectId }: AppGene
   const [sidebarWidth, setSidebarWidth] = useState(256)
   const [chatWidth, setChatWidth] = useState(384)
   const [gitStatus, setGitStatus] = useState<any>(null)
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false)
+  const [editorSettings, setEditorSettings] = useState<EditorSettings>({
+    fontSize: 14,
+    wordWrap: false,
+    autoSaveMode: 'off',
+  })
+
+  // Load settings from localStorage
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem('appGeneratorEditorSettings')
+      if (stored) {
+        const parsed = JSON.parse(stored)
+        setEditorSettings((prev) => ({
+          ...prev,
+          ...parsed,
+        }))
+      }
+    } catch {
+      // ignore
+    }
+  }, [])
+
+  // Persist settings
+  useEffect(() => {
+    try {
+      window.localStorage.setItem('appGeneratorEditorSettings', JSON.stringify(editorSettings))
+    } catch {
+      // ignore
+    }
+  }, [editorSettings])
 
   // TASK 2: Workspace Bootstrap - Initialize workspace on mount
   useEffect(() => {
@@ -670,6 +702,7 @@ export default function AppGeneratorIDE({ projectId: initialProjectId }: AppGene
           activeView={activeView}
           onViewChange={handleViewChange}
           gitStatus={gitStatus}
+          onOpenSettings={() => setIsSettingsOpen(true)}
         />
 
         {/* Left Sidebar: Files/Search/Source Control */}
@@ -724,6 +757,7 @@ export default function AppGeneratorIDE({ projectId: initialProjectId }: AppGene
             content={fileContent}
             onSave={(content) => activeFile && handleFileSave(activeFile, content)}
             onChange={setFileContent}
+            editorSettings={editorSettings}
             onRun={(filePath, mode) => {
               // Dispatch command to terminal
               window.dispatchEvent(new CustomEvent('terminal-command', {
@@ -741,8 +775,8 @@ export default function AppGeneratorIDE({ projectId: initialProjectId }: AppGene
           onResize={setChatWidth}
         >
           <div className="h-full flex flex-col border-l border-gray-200 dark:border-gray-800">
-            {/* AI Chat (Resizable) */}
-            <div className="flex-1 min-h-0 relative">
+            {/* AI Chat */}
+            <div className="flex-1 min-h-0">
               <IDEChat
                 messages={aiMessages}
                 confidenceReport={confidenceReport}
@@ -751,13 +785,6 @@ export default function AppGeneratorIDE({ projectId: initialProjectId }: AppGene
                 onStepApproved={handleStepApproved}
                 className="h-full"
                 disabled={!workspaceInitialized}
-              />
-              <div
-                className="absolute bottom-0 left-0 right-0 h-1 cursor-row-resize hover:bg-blue-500 transition-colors"
-                onMouseDown={(e) => {
-                  e.preventDefault()
-                  // TODO: Implement vertical resizing for chat panel
-                }}
               />
             </div>
 
@@ -776,6 +803,14 @@ export default function AppGeneratorIDE({ projectId: initialProjectId }: AppGene
         projectId={projectId}
         isVisible={showTerminal}
         onClose={() => setShowTerminal(false)}
+      />
+
+      {/* Settings Panel */}
+      <IDESettingsPanel
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        settings={editorSettings}
+        setSettings={setEditorSettings}
       />
     </div>
   )

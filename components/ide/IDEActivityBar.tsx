@@ -1,6 +1,5 @@
 'use client'
 
-import { useState } from 'react'
 import { 
   FiFile, 
   FiSearch, 
@@ -18,12 +17,14 @@ interface IDEActivityBarProps {
     hasChanges: boolean
     branch?: string | null
   }
+  onOpenSettings?: () => void
 }
 
 export default function IDEActivityBar({ 
   activeView, 
   onViewChange,
-  gitStatus 
+  gitStatus,
+  onOpenSettings,
 }: IDEActivityBarProps) {
   return (
     <div className="w-12 flex-shrink-0 flex flex-col items-center bg-gray-100 dark:bg-gray-950 border-r border-gray-200 dark:border-gray-800">
@@ -102,6 +103,7 @@ export default function IDEActivityBar({
       <button
         className="w-full h-12 flex items-center justify-center text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors"
         title="Settings"
+        onClick={onOpenSettings}
       >
         <FiSettings className="w-5 h-5" />
       </button>

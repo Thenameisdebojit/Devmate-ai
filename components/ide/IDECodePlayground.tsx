@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { FiPlay, FiSquare, FiCode } from 'react-icons/fi'
 import dynamic from 'next/dynamic'
+import type { EditorSettings } from './IDESettingsPanel'
 
 const MonacoEditor = dynamic(() => import('@monaco-editor/react'), { ssr: false })
 
@@ -13,6 +14,7 @@ interface IDECodePlaygroundProps {
   onSave: (content: string) => void
   onChange: (content: string) => void
   onRun?: (filePath: string, mode: 'run' | 'debug') => void
+  editorSettings?: EditorSettings
 }
 
 export default function IDECodePlayground({
@@ -22,6 +24,7 @@ export default function IDECodePlayground({
   onSave,
   onChange,
   onRun,
+  editorSettings,
 }: IDECodePlaygroundProps) {
   const [isRunning, setIsRunning] = useState(false)
   const [isDirty, setIsDirty] = useState(false)
@@ -38,6 +41,18 @@ export default function IDECodePlayground({
     onSave(content)
     setIsDirty(false)
   }
+
+  // Auto save like VS Code "afterDelay"
+  useEffect(() => {
+    if (!isDirty || editorSettings?.autoSaveMode !== 'afterDelay') return
+
+    const timer = setTimeout(() => {
+      handleSave()
+    }, 1000)
+
+    return () => clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isDirty, editorSettings?.autoSaveMode, content])
 
   const handleRun = async (mode: 'run' | 'debug' = 'run') => {
     if (!filePath || !projectId) {
@@ -221,8 +236,8 @@ export default function IDECodePlayground({
             theme="vs-dark"
             options={{
               minimap: { enabled: true },
-              fontSize: 14,
-              wordWrap: 'on',
+              fontSize: editorSettings?.fontSize ?? 14,
+              wordWrap: editorSettings?.wordWrap ? 'on' : 'off',
               automaticLayout: true,
               cursorBlinking: 'smooth',
               cursorSmoothCaretAnimation: 'on',
