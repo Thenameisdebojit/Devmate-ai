@@ -23,6 +23,9 @@ import IDECodePlayground from './IDECodePlayground'
 import IDETerminalPanel from './IDETerminalPanel'
 import IDEChat from './IDEChat'
 import IDERuntimeControls from './IDERuntimeControls'
+import IDEActivityBar from './IDEActivityBar'
+import IDESourceControl from './IDESourceControl'
+import IDEResizablePanel from './IDEResizablePanel'
 import ThemeToggle from '@/app/components/ThemeToggle'
 import { getWorkspaceDaemon as getCoreWorkspaceDaemon, getAgentObserver, getAgentActionHandler, getAgentPlanExecutor, getAgentConfidenceEngine, type AgentPlan } from '@/core/workspace'
 
@@ -48,6 +51,10 @@ export default function AppGeneratorIDE({ projectId: initialProjectId }: AppGene
   const [showOutput, setShowOutput] = useState(false)
   const [showDebugConsole, setShowDebugConsole] = useState(false)
   const [wordWrap, setWordWrap] = useState(false)
+  const [activeView, setActiveView] = useState<'explorer' | 'search' | 'source-control' | 'run' | 'extensions'>('explorer')
+  const [sidebarWidth, setSidebarWidth] = useState(256)
+  const [chatWidth, setChatWidth] = useState(384)
+  const [gitStatus, setGitStatus] = useState<any>(null)
 
   // TASK 2: Workspace Bootstrap - Initialize workspace on mount
   useEffect(() => {
@@ -240,6 +247,43 @@ export default function AppGeneratorIDE({ projectId: initialProjectId }: AppGene
     window.addEventListener('workspace-folder-uploaded', handleFolderUploaded)
     return () => window.removeEventListener('workspace-folder-uploaded', handleFolderUploaded)
   }, [loadFiles])
+
+  // Fetch Git status
+  useEffect(() => {
+    if (!projectId) return
+
+    const fetchGitStatus = async () => {
+      try {
+        const response = await fetch(`/api/git/status?projectId=${projectId}`)
+        if (response.ok) {
+          const data = await response.json()
+          setGitStatus(data)
+        }
+      } catch (error) {
+        console.error('Failed to fetch Git status:', error)
+      }
+    }
+
+    fetchGitStatus()
+    const interval = setInterval(fetchGitStatus, 10000)
+    return () => clearInterval(interval)
+  }, [projectId])
+
+  // Handle view change
+  const handleViewChange = (view: 'explorer' | 'search' | 'source-control' | 'run' | 'extensions') => {
+    setActiveView(view)
+    if (view === 'explorer') {
+      setShowExplorer(true)
+      setShowSearch(false)
+    } else if (view === 'search') {
+      setShowSearch(true)
+      setShowExplorer(false)
+    } else if (view === 'source-control') {
+      setShowExplorer(false)
+      setShowSearch(false)
+    }
+    setShowSidebar(true)
+  }
 
   // Load file content
   const loadFileContent = useCallback(async (filePath: string) => {
@@ -478,7 +522,9 @@ export default function AppGeneratorIDE({ projectId: initialProjectId }: AppGene
     if (line) {
       const lineNum = parseInt(line, 10)
       if (!isNaN(lineNum)) {
-        editorRef.current?.goToLine(lineNum)
+        // Go to line is handled by Monaco editor internally via keyboard shortcut
+        // This is just a placeholder for the menu action
+        console.log('Go to line:', lineNum)
       }
     }
   }, [])
@@ -619,13 +665,55 @@ export default function AppGeneratorIDE({ projectId: initialProjectId }: AppGene
 
       {/* Main IDE Layout */}
       <div className="flex-1 flex min-h-0">
-        {/* Left Sidebar: Files */}
-        {showSidebar && showExplorer && (
-          <IDESidebar
-            files={files}
-            selectedFile={activeFile}
-            onFileSelect={handleFileSelect}
-          />
+        {/* Activity Bar */}
+        <IDEActivityBar
+          activeView={activeView}
+          onViewChange={handleViewChange}
+          gitStatus={gitStatus}
+        />
+
+        {/* Left Sidebar: Files/Search/Source Control */}
+        {showSidebar && (
+          <IDEResizablePanel
+            defaultWidth={sidebarWidth}
+            minWidth={200}
+            maxWidth={600}
+            onResize={setSidebarWidth}
+          >
+            {activeView === 'explorer' && (
+              <IDESidebar
+                files={files}
+                selectedFile={activeFile}
+                onFileSelect={handleFileSelect}
+                projectId={projectId}
+                onFilesChange={loadFiles}
+              />
+            )}
+            {activeView === 'search' && (
+              <div className="h-full flex flex-col bg-gray-50 dark:bg-gray-900">
+                <div className="p-4 text-sm text-gray-500 dark:text-gray-400">
+                  Search functionality coming soon
+                </div>
+              </div>
+            )}
+            {activeView === 'source-control' && (
+              <IDESourceControl projectId={projectId} />
+            )}
+            {activeView === 'run' && (
+              <div className="h-full flex flex-col bg-gray-50 dark:bg-gray-900">
+                <div className="p-4 text-sm text-gray-500 dark:text-gray-400">
+                  Run and Debug panel coming soon
+                </div>
+              </div>
+            )}
+            {activeView === 'extensions' && (
+              <div className="h-full flex flex-col bg-gray-50 dark:bg-gray-900">
+                <div className="p-4 text-sm text-gray-500 dark:text-gray-400">
+                  Extensions panel coming soon
+                </div>
+              </div>
+            )}
+          </IDEResizablePanel>
         )}
 
         {/* Center: Code Playground with Editor */}
@@ -645,26 +733,42 @@ export default function AppGeneratorIDE({ projectId: initialProjectId }: AppGene
           />
         </div>
 
-        {/* Right Sidebar: Chat, Runtime */}
-        <div className="w-96 flex-shrink-0 flex flex-col border-l border-gray-200 dark:border-gray-800">
-          {/* AI Chat */}
-          <IDEChat
-            messages={aiMessages}
-            confidenceReport={confidenceReport}
-            onSend={handleUserPrompt}
-            onPlanApproved={handlePlanApproved}
-            onStepApproved={handleStepApproved}
-            className="flex-1 min-h-0"
-            disabled={!workspaceInitialized}
-          />
+        {/* Right Sidebar: Chat, Runtime (Resizable) */}
+        <IDEResizablePanel
+          defaultWidth={chatWidth}
+          minWidth={250}
+          maxWidth={600}
+          onResize={setChatWidth}
+        >
+          <div className="h-full flex flex-col border-l border-gray-200 dark:border-gray-800">
+            {/* AI Chat (Resizable) */}
+            <div className="flex-1 min-h-0 relative">
+              <IDEChat
+                messages={aiMessages}
+                confidenceReport={confidenceReport}
+                onSend={handleUserPrompt}
+                onPlanApproved={handlePlanApproved}
+                onStepApproved={handleStepApproved}
+                className="h-full"
+                disabled={!workspaceInitialized}
+              />
+              <div
+                className="absolute bottom-0 left-0 right-0 h-1 cursor-row-resize hover:bg-blue-500 transition-colors"
+                onMouseDown={(e) => {
+                  e.preventDefault()
+                  // TODO: Implement vertical resizing for chat panel
+                }}
+              />
+            </div>
 
-          {/* Runtime Controls */}
-          <IDERuntimeControls
-            projectId={projectId}
-            runtimeState={runtimeState}
-            className="h-32 flex-shrink-0 border-t border-gray-200 dark:border-gray-800"
-          />
-        </div>
+            {/* Runtime Controls */}
+            <IDERuntimeControls
+              projectId={projectId}
+              runtimeState={runtimeState}
+              className="h-32 flex-shrink-0 border-t border-gray-200 dark:border-gray-800"
+            />
+          </div>
+        </IDEResizablePanel>
       </div>
 
       {/* Terminal Panel (Bottom) */}

@@ -1,34 +1,358 @@
 'use client'
 
+import { useState, useCallback, useEffect } from 'react'
+import { 
+  FiFile, 
+  FiFolder, 
+  FiChevronRight, 
+  FiChevronDown,
+  FiEdit2,
+  FiTrash2,
+  FiCopy,
+  FiDownload,
+  FiRefreshCw
+} from 'react-icons/fi'
+import { motion, AnimatePresence } from 'framer-motion'
+
+interface FileNode {
+  name: string
+  path: string
+  type: 'file' | 'directory'
+  children?: FileNode[]
+}
+
 interface IDESidebarProps {
   files: Array<{ path: string; type?: string }>
   selectedFile?: string
   onFileSelect: (path: string) => void
+  projectId?: string
+  onFilesChange?: () => void
 }
 
-export default function IDESidebar({ files, selectedFile, onFileSelect }: IDESidebarProps) {
-  return (
-    <div className="w-64 flex-shrink-0 border-r border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 overflow-y-auto">
-      <div className="p-2">
-        <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2 px-2">
-          Files
+export default function IDESidebar({ 
+  files, 
+  selectedFile, 
+  onFileSelect,
+  projectId,
+  onFilesChange
+}: IDESidebarProps) {
+  const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set())
+  const [contextMenu, setContextMenu] = useState<{ path: string; x: number; y: number } | null>(null)
+  const [renamingPath, setRenamingPath] = useState<string | null>(null)
+  const [renameValue, setRenameValue] = useState('')
+
+  // Build tree structure from flat file list
+  const buildTree = useCallback((): FileNode[] => {
+    const tree: FileNode[] = []
+    const pathMap = new Map<string, FileNode>()
+
+    files.forEach((file) => {
+      const parts = file.path.split('/').filter(Boolean)
+      let currentPath = ''
+      
+      parts.forEach((part, index) => {
+        const parentPath = currentPath
+        currentPath = parentPath ? `${parentPath}/${part}` : part
+        const isLast = index === parts.length - 1
+
+        if (!pathMap.has(currentPath)) {
+          const node: FileNode = {
+            name: part,
+            path: currentPath,
+            type: isLast ? 'file' : 'directory',
+            children: [],
+          }
+          pathMap.set(currentPath, node)
+
+          if (parentPath) {
+            const parent = pathMap.get(parentPath)
+            if (parent) {
+              parent.children = parent.children || []
+              parent.children.push(node)
+            }
+          } else {
+            tree.push(node)
+          }
+        }
+      })
+    })
+
+    // Sort tree
+    const sortTree = (nodes: FileNode[]): FileNode[] => {
+      return nodes.sort((a, b) => {
+        if (a.type !== b.type) {
+          return a.type === 'directory' ? -1 : 1
+        }
+        return a.name.localeCompare(b.name)
+      }).map(node => ({
+        ...node,
+        children: node.children ? sortTree(node.children) : undefined,
+      }))
+    }
+
+    return sortTree(tree)
+  }, [files])
+
+  const tree = buildTree()
+
+  const toggleExpand = (path: string) => {
+    setExpandedPaths((prev) => {
+      const next = new Set(prev)
+      if (next.has(path)) {
+        next.delete(path)
+      } else {
+        next.add(path)
+      }
+      return next
+    })
+  }
+
+  const handleContextMenu = (e: React.MouseEvent, path: string) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setContextMenu({ path, x: e.clientX, y: e.clientY })
+  }
+
+  const handleRename = async (oldPath: string, newName: string) => {
+    if (!projectId || !newName || newName.trim() === '') return
+
+    const pathParts = oldPath.split('/')
+    pathParts[pathParts.length - 1] = newName
+    const newPath = pathParts.join('/')
+
+    try {
+      const response = await fetch('/api/runtime/file/rename', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectId, oldPath, newPath }),
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        alert(error.error || 'Failed to rename file')
+        return
+      }
+
+      setRenamingPath(null)
+      setRenameValue('')
+      onFilesChange?.()
+      
+      // If the renamed file was selected, update selection
+      if (selectedFile === oldPath) {
+        onFileSelect(newPath)
+      }
+    } catch (error) {
+      console.error('Rename error:', error)
+      alert('Failed to rename file')
+    }
+  }
+
+  const handleDelete = async (path: string) => {
+    if (!projectId) return
+    if (!confirm(`Are you sure you want to delete "${path}"?`)) return
+
+    try {
+      const response = await fetch('/api/runtime/file/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectId, filePath: path }),
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        alert(error.error || 'Failed to delete file')
+        return
+      }
+
+      setContextMenu(null)
+      onFilesChange?.()
+      
+      // If the deleted file was selected, clear selection
+      if (selectedFile === path) {
+        onFileSelect('')
+      }
+    } catch (error) {
+      console.error('Delete error:', error)
+      alert('Failed to delete file')
+    }
+  }
+
+  const getFileIcon = (path: string) => {
+    const ext = path.split('.').pop()?.toLowerCase()
+    return <FiFile className="w-4 h-4" />
+  }
+
+  const renderNode = (node: FileNode, level = 0): JSX.Element => {
+    const isExpanded = expandedPaths.has(node.path)
+    const isSelected = selectedFile === node.path
+    const isRenaming = renamingPath === node.path
+    const hasChildren = node.children && node.children.length > 0
+
+    return (
+      <div key={node.path}>
+        <div
+          className={`flex items-center px-2 py-1 text-sm cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-800 ${
+            isSelected ? 'bg-blue-100 dark:bg-blue-900/30' : ''
+          }`}
+          style={{ paddingLeft: `${8 + level * 16}px` }}
+          onClick={() => {
+            if (node.type === 'directory') {
+              toggleExpand(node.path)
+            } else {
+              onFileSelect(node.path)
+            }
+          }}
+          onContextMenu={(e) => handleContextMenu(e, node.path)}
+        >
+          {node.type === 'directory' ? (
+            <>
+              {hasChildren ? (
+                isExpanded ? (
+                  <FiChevronDown className="w-4 h-4 mr-1 flex-shrink-0" />
+                ) : (
+                  <FiChevronRight className="w-4 h-4 mr-1 flex-shrink-0" />
+                )
+              ) : (
+                <span className="w-4 mr-1" />
+              )}
+              <FiFolder className="w-4 h-4 mr-1.5 text-blue-500 flex-shrink-0" />
+            </>
+          ) : (
+            <>
+              <span className="w-4 mr-1" />
+              {getFileIcon(node.path)}
+              <span className="w-1.5" />
+            </>
+          )}
+          {isRenaming ? (
+            <input
+              type="text"
+              value={renameValue}
+              onChange={(e) => setRenameValue(e.target.value)}
+              onBlur={() => {
+                if (renameValue && renameValue !== node.name) {
+                  handleRename(node.path, renameValue)
+                } else {
+                  setRenamingPath(null)
+                  setRenameValue('')
+                }
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  if (renameValue && renameValue !== node.name) {
+                    handleRename(node.path, renameValue)
+                  } else {
+                    setRenamingPath(null)
+                    setRenameValue('')
+                  }
+                } else if (e.key === 'Escape') {
+                  setRenamingPath(null)
+                  setRenameValue('')
+                }
+              }}
+              autoFocus
+              className="flex-1 px-1 py-0.5 text-sm border border-blue-500 rounded bg-white dark:bg-gray-800"
+              onClick={(e) => e.stopPropagation()}
+            />
+          ) : (
+            <span className="flex-1 truncate">{node.name}</span>
+          )}
         </div>
-        <div className="space-y-1">
-          {files.map((file) => (
-            <button
-              key={file.path}
-              onClick={() => onFileSelect(file.path)}
-              className={`w-full text-left px-2 py-1.5 text-sm rounded hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors ${
-                selectedFile === file.path
-                  ? 'bg-gray-200 dark:bg-gray-800 font-medium'
-                  : 'text-gray-700 dark:text-gray-300'
-              }`}
-            >
-              {file.path}
-            </button>
-          ))}
-        </div>
+        {node.type === 'directory' && isExpanded && hasChildren && (
+          <div>
+            {node.children!.map((child) => renderNode(child, level + 1))}
+          </div>
+        )}
       </div>
+    )
+  }
+
+  useEffect(() => {
+    const handleClickOutside = () => {
+      setContextMenu(null)
+    }
+    document.addEventListener('click', handleClickOutside)
+    return () => document.removeEventListener('click', handleClickOutside)
+  }, [])
+
+  return (
+    <div className="w-64 flex-shrink-0 flex flex-col border-r border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900">
+      {/* Header */}
+      <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200 dark:border-gray-800">
+        <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+          Explorer
+        </div>
+        <button
+          onClick={() => onFilesChange?.()}
+          className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400"
+          title="Refresh"
+        >
+          <FiRefreshCw className="w-4 h-4" />
+        </button>
+      </div>
+
+      {/* File Tree */}
+      <div className="flex-1 overflow-y-auto">
+        {tree.length === 0 ? (
+          <div className="p-4 text-sm text-gray-500 dark:text-gray-400 text-center">
+            No files
+          </div>
+        ) : (
+          <div className="py-1">
+            {tree.map((node) => renderNode(node))}
+          </div>
+        )}
+      </div>
+
+      {/* Context Menu */}
+      <AnimatePresence>
+        {contextMenu && (
+          <>
+            <div
+              className="fixed inset-0 z-40"
+              onClick={() => setContextMenu(null)}
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="fixed z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 min-w-[180px]"
+              style={{ left: contextMenu.x, top: contextMenu.y }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button
+                onClick={() => {
+                  setRenamingPath(contextMenu.path)
+                  setRenameValue(contextMenu.path.split('/').pop() || '')
+                  setContextMenu(null)
+                }}
+                className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
+              >
+                <FiEdit2 className="w-4 h-4" />
+                Rename
+              </button>
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(contextMenu.path)
+                  setContextMenu(null)
+                }}
+                className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
+              >
+                <FiCopy className="w-4 h-4" />
+                Copy Path
+              </button>
+              <div className="border-t border-gray-200 dark:border-gray-700 my-1" />
+              <button
+                onClick={() => handleDelete(contextMenu.path)}
+                className="w-full px-4 py-2 text-left text-sm text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
+              >
+                <FiTrash2 className="w-4 h-4" />
+                Delete
+              </button>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </div>
   )
 }
