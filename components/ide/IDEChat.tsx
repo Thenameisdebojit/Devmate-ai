@@ -57,8 +57,11 @@ export default function IDEChat({
       // Ensure input is valid - use default if empty
       const inputValue = input?.trim() || ''
       
+      // If no input and action is generate, use a default description
+      const finalInput = inputValue || (action === 'generate' ? 'Create a new project' : '')
+      
       // Build intent - IntentBuilder handles empty descriptions
-      const intent = IntentBuilder.build(action, inputValue)
+      const intent = IntentBuilder.build(action, finalInput)
       const validation = IntentBuilder.validate(intent)
 
       if (!validation.valid) {

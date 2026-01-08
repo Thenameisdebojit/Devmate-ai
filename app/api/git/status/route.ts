@@ -26,8 +26,21 @@ export async function GET(req: NextRequest) {
       )
     }
 
-    const workspace = WorkspaceRegistry.get(projectId)
-    const projectRoot = workspace.getRootPath()
+    // Check if workspace is registered, if not return default status
+    let workspace
+    let projectRoot
+    try {
+      workspace = WorkspaceRegistry.get(projectId)
+      projectRoot = workspace.getRootPath()
+    } catch (error: any) {
+      // Workspace not initialized - return default status
+      return NextResponse.json({
+        initialized: false,
+        hasChanges: false,
+        branch: null,
+        remotes: [],
+      })
+    }
 
     try {
       // Check if git is initialized

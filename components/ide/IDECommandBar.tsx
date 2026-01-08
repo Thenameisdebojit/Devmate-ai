@@ -1,14 +1,14 @@
 'use client'
 
 /**
- * PHASE 1: Command-Driven UX
+ * PHASE 1: Command-Driven UX (Refactored)
  * 
- * Bottom command bar that replaces free-form chat with explicit actions.
- * Each action maps to an ExecutionIntent.
+ * Simplified command bar with natural language input.
+ * Removed explicit action buttons - user can describe what they want.
  */
 
 import { useState } from 'react'
-import { FiPlay, FiCode, FiAlertCircle, FiHelpCircle, FiZap } from 'react-icons/fi'
+import { FiSend, FiImage, FiGlobe, FiAtSign, FiRepeat } from 'react-icons/fi'
 import { motion } from 'framer-motion'
 
 export type CommandAction = 'generate' | 'run' | 'fix' | 'explain'
@@ -25,87 +25,62 @@ export default function IDECommandBar({
   isProcessing = false,
 }: IDECommandBarProps) {
   const [input, setInput] = useState('')
-  const [selectedAction, setSelectedAction] = useState<CommandAction | null>(null)
+  const [autoMode, setAutoMode] = useState(false)
+  const [speed, setSpeed] = useState(1)
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (disabled || isProcessing) return
+    if (disabled || isProcessing || !input.trim()) return
 
-    // PHASE -1: Validate input based on action
-    const action = selectedAction || 'generate' // Default to generate
+    // Infer action from input - default to generate for natural language
+    const lowerInput = input.toLowerCase()
+    let action: CommandAction = 'generate'
     
-    // For generate, input is optional (will use default description)
-    // For other actions, input can be empty (will use defaults)
-    const inputValue = input.trim()
-    
-    // Allow any input - IntentBuilder will handle it
-    // Even short inputs like "hi" will be processed (might become explain intent)
-    onCommand(action, inputValue || undefined)
+    if (lowerInput.includes('run') || lowerInput.includes('execute') || lowerInput.includes('start')) {
+      action = 'run'
+    } else if (lowerInput.includes('fix') || lowerInput.includes('error') || lowerInput.includes('bug')) {
+      action = 'fix'
+    } else if (lowerInput.includes('explain') || lowerInput.includes('what') || lowerInput.includes('how')) {
+      action = 'explain'
+    } else {
+      // Default: generate (build, create, make, etc.)
+      action = 'generate'
+    }
+
+    onCommand(action, input.trim())
     setInput('')
-    setSelectedAction(null)
-  }
-
-  const handleQuickAction = (action: CommandAction) => {
-    if (disabled || isProcessing) return
-    onCommand(action)
   }
 
   return (
     <div className="border-t border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
-      {/* Quick Action Buttons */}
-      <div className="flex items-center gap-2 px-4 py-2 border-b border-gray-200 dark:border-gray-800">
-        <button
-          onClick={() => handleQuickAction('generate')}
-          disabled={disabled || isProcessing}
-          className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          title="Generate code (Ctrl+G)"
-        >
-          <FiZap className="w-3 h-3" />
-          Generate
-        </button>
-        <button
-          onClick={() => handleQuickAction('run')}
-          disabled={disabled || isProcessing}
-          className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium bg-green-500 text-white rounded hover:bg-green-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          title="Run project (Ctrl+R)"
-        >
-          <FiPlay className="w-3 h-3" />
-          Run
-        </button>
-        <button
-          onClick={() => handleQuickAction('fix')}
-          disabled={disabled || isProcessing}
-          className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium bg-orange-500 text-white rounded hover:bg-orange-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          title="Fix errors (Ctrl+F)"
-        >
-          <FiAlertCircle className="w-3 h-3" />
-          Fix Errors
-        </button>
-        <button
-          onClick={() => handleQuickAction('explain')}
-          disabled={disabled || isProcessing}
-          className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium bg-purple-500 text-white rounded hover:bg-purple-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          title="Explain code (Ctrl+E)"
-        >
-          <FiHelpCircle className="w-3 h-3" />
-          Explain
-        </button>
-      </div>
-
-      {/* Command Input */}
-      <form onSubmit={handleSubmit} className="px-4 py-3">
+      {/* Command Input with Features */}
+      <form onSubmit={handleSubmit} className="px-3 py-2">
         <div className="flex items-center gap-2">
-          {/* Action Selector */}
-          <select
-            value={selectedAction || 'generate'}
-            onChange={(e) => setSelectedAction(e.target.value as CommandAction)}
-            disabled={disabled || isProcessing}
-            className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+          {/* Auto Mode Toggle */}
+          <button
+            type="button"
+            onClick={() => setAutoMode(!autoMode)}
+            className={`p-1.5 rounded transition-colors ${
+              autoMode
+                ? 'bg-blue-500 text-white'
+                : 'text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-800'
+            }`}
+            title="Auto mode"
           >
-            <option value="generate">Generate</option>
-            <option value="run">Run</option>
-            <option value="fix">Fix</option>
-            <option value="explain">Explain</option>
+            <FiRepeat className="w-4 h-4" />
+          </button>
+
+          {/* Speed Selector */}
+          <select
+            value={speed}
+            onChange={(e) => setSpeed(Number(e.target.value))}
+            className="px-2 py-1 text-xs border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            title="Speed"
+          >
+            <option value={0.5}>0.5x</option>
+            <option value={1}>1x</option>
+            <option value={1.5}>1.5x</option>
+            <option value={2}>2x</option>
           </select>
 
           {/* Input Field */}
@@ -113,38 +88,51 @@ export default function IDECommandBar({
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder={
-              disabled
-                ? 'Initializing workspace...'
-                : selectedAction === 'generate'
-                ? 'Describe what to generate (optional - will create starter project if empty)...'
-                : selectedAction === 'run'
-                ? 'Run command or leave empty to run project...'
-                : selectedAction === 'fix'
-                ? 'Describe errors to fix or leave empty to auto-detect...'
-                : 'Ask about code...'
-            }
+            placeholder="Ask AI to build, create, or modify..."
             disabled={disabled || isProcessing}
             className="flex-1 px-3 py-2 text-sm border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
           />
 
-          {/* Submit Button */}
+          {/* Feature Icons */}
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              className="p-1.5 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-800 rounded transition-colors"
+              title="Mention (@)"
+            >
+              <FiAtSign className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              className="p-1.5 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-800 rounded transition-colors"
+              title="Web search"
+            >
+              <FiGlobe className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              className="p-1.5 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-800 rounded transition-colors"
+              title="Image"
+            >
+              <FiImage className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Send/Execute Button - Compact */}
           <button
             type="submit"
-            disabled={disabled || isProcessing}
-            className="px-4 py-2 text-sm font-medium bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            disabled={disabled || isProcessing || !input.trim()}
+            className="px-3 py-2 text-sm font-medium bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+            title="Send"
           >
             {isProcessing ? (
-              <>
-                <motion.div
-                  className="w-4 h-4 border-2 border-white border-t-transparent rounded-full"
-                  animate={{ rotate: 360 }}
-                  transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                />
-                Processing...
-              </>
+              <motion.div
+                className="w-4 h-4 border-2 border-white border-t-transparent rounded-full"
+                animate={{ rotate: 360 }}
+                transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+              />
             ) : (
-              'Execute'
+              <FiSend className="w-4 h-4" />
             )}
           </button>
         </div>
@@ -152,4 +140,3 @@ export default function IDECommandBar({
     </div>
   )
 }
-

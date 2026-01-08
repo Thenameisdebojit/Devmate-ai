@@ -720,9 +720,13 @@ export default function AppGeneratorIDE({ projectId: initialProjectId }: AppGene
         errorContent = error.message
         // Provide context-specific help
         if (error.message.includes('empty') || error.message.includes('no files')) {
-          errorContent = `${error.message}\n\n💡 Tip: Use "Generate" to create a starter project first.`
+          errorContent = `${error.message}\n\n💡 Tip: Try describing what you want to build, e.g., "build a simple calculator website"`
         } else if (error.message.includes('invalid') || error.message.includes('Invalid')) {
-          errorContent = `${error.message}\n\n💡 Tip: Choose an action (Generate / Run / Fix / Explain) and provide a description.`
+          errorContent = `${error.message}\n\n💡 Tip: Describe what you want to build in natural language, e.g., "create a todo app" or "build a snake game"`
+        } else if (error.message.includes('No files were generated') || error.message.includes('No valid files')) {
+          errorContent = `${error.message}\n\n💡 Tip: Try being more specific, e.g., "build a simple calculator website using HTML, CSS, and JavaScript"`
+        } else if (error.message.includes('Workspace not initialized')) {
+          errorContent = `${error.message}\n\n💡 Tip: The workspace is initializing. Please wait a moment and try again.`
         }
       }
       

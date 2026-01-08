@@ -121,15 +121,20 @@ export class IntentBuilder {
       return IntentBuilder.build('explain', input)
     }
 
-    // Generate keywords: build, create, make, generate, website, app, calculator, etc.
+    // Generate keywords: build, create, make, generate, website, app, calculator, game, snake, todo, etc.
     if (lowerInput.includes('build') || lowerInput.includes('create') || 
         lowerInput.includes('make') || lowerInput.includes('generate') ||
-        lowerInput.includes('website') || lowerInput.includes('app') ||
-        lowerInput.includes('calculator') || lowerInput.includes('project')) {
+        lowerInput.includes('website') || lowerInput.includes('web') ||
+        lowerInput.includes('app') || lowerInput.includes('application') ||
+        lowerInput.includes('calculator') || lowerInput.includes('project') ||
+        lowerInput.includes('game') || lowerInput.includes('snake') ||
+        lowerInput.includes('todo') || lowerInput.includes('blog') ||
+        lowerInput.includes('portfolio') || lowerInput.includes('landing') ||
+        lowerInput.includes('page') || lowerInput.includes('site')) {
       return IntentBuilder.build('generate', input)
     }
 
-    // Default: generate (most common action)
+    // Default: generate (most common action for natural language)
     return IntentBuilder.build('generate', input)
   }
 

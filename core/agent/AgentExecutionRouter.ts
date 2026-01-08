@@ -215,12 +215,19 @@ export class AgentExecutionRouter {
       // PHASE -1: Create project root if missing
       await fs.mkdir(rootPath, { recursive: true })
 
-      // PHASE -1: Check if workspace is empty - run bootstrap first
+      // PHASE -1: Check if workspace is empty
       const { BootstrapGenerator } = await import('@/lib/bootstrap/BootstrapGenerator')
       const fileCount = await BootstrapGenerator.getFileCount(rootPath)
       
-      if (fileCount === 0) {
-        // Workspace is empty - run bootstrap generator
+      // If workspace is empty and user has a specific description, proceed with AI generation
+      // If workspace is empty and description is generic/empty, run bootstrap
+      const hasSpecificDescription = executionIntent.description && 
+        executionIntent.description.trim().length > 0 &&
+        executionIntent.description !== 'Create a new project' &&
+        !executionIntent.description.toLowerCase().includes('new project')
+      
+      if (fileCount === 0 && !hasSpecificDescription) {
+        // Workspace is empty and no specific description - run bootstrap generator
         onEvent?.({
           type: 'AGENT_THINKING',
           payload: { message: 'Workspace is empty. Creating initial project structure...' },
@@ -264,9 +271,12 @@ export class AgentExecutionRouter {
           },
         })
 
-        // Bootstrap complete - return early (don't run AI generation on empty workspace)
+        // Bootstrap complete - return early
         return
       }
+      
+      // If workspace is empty but user has specific description, proceed with AI generation
+      // This allows users to build specific apps/websites from scratch
 
       // Workspace has files - proceed with AI generation
       onEvent?.({
@@ -275,10 +285,17 @@ export class AgentExecutionRouter {
       })
 
       const { generateAppDirect } = await import('@/lib/appGenerator')
-      const generatedProject = await generateAppDirect(executionIntent.description)
+      
+      let generatedProject
+      try {
+        generatedProject = await generateAppDirect(executionIntent.description)
+      } catch (error: any) {
+        console.error('[AgentExecutionRouter] Generation error:', error)
+        throw new Error(`Failed to generate code: ${error.message || 'AI generation failed. Please try again with a more specific description.'}`)
+      }
 
-      if (!generatedProject.files || generatedProject.files.length === 0) {
-        throw new Error('No files were generated')
+      if (!generatedProject || !generatedProject.files || generatedProject.files.length === 0) {
+        throw new Error('No files were generated. The AI might need a more specific description. Try: "build a simple calculator website" or "create a todo app"')
       }
 
       // PHASE 3: Apply files via FileMutationKernel (not direct fs.writeFile)

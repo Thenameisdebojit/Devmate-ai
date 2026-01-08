@@ -12,7 +12,8 @@ import {
   FiDownload,
   FiRefreshCw,
   FiRotateCcw,
-  FiPlus
+  FiPlus,
+  FiMinimize2
 } from 'react-icons/fi'
 import { motion, AnimatePresence } from 'framer-motion'
 
@@ -51,6 +52,7 @@ export default function IDESidebar({
   const [creatingFile, setCreatingFile] = useState<string | null>(null)
   const [creatingFolder, setCreatingFolder] = useState<string | null>(null)
   const [newItemName, setNewItemName] = useState('')
+  const [hoveredFolder, setHoveredFolder] = useState<string | null>(null)
 
   // Build tree structure from flat file list
   const buildTree = useCallback((): FileNode[] => {
@@ -233,6 +235,23 @@ export default function IDESidebar({
     const filePath = parentPath ? `${parentPath}/${fileName}` : fileName
 
     try {
+      // Ensure workspace is initialized before creating file
+      try {
+        const initResponse = await fetch('/api/workspace/init', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ projectId, mode: 'app-generator' }),
+        })
+
+        if (!initResponse.ok) {
+          const error = await initResponse.json()
+          throw new Error(error.error || 'Failed to initialize workspace')
+        }
+      } catch (initError) {
+        console.error('Workspace init error:', initError)
+        // Continue anyway - workspace might already be initialized
+      }
+
       if (onCreateFile) {
         onCreateFile(filePath)
       } else {
@@ -253,7 +272,7 @@ export default function IDESidebar({
       }
     } catch (error) {
       console.error('Create file error:', error)
-      alert('Failed to create file')
+      alert(`Failed to create file: ${error instanceof Error ? error.message : 'Unknown error'}`)
     } finally {
       setCreatingFile(null)
       setNewItemName('')
@@ -274,6 +293,23 @@ export default function IDESidebar({
     const folderPath = parentPath ? `${parentPath}/${folderName}` : folderName
 
     try {
+      // Ensure workspace is initialized before creating folder
+      try {
+        const initResponse = await fetch('/api/workspace/init', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ projectId, mode: 'app-generator' }),
+        })
+
+        if (!initResponse.ok) {
+          const error = await initResponse.json()
+          throw new Error(error.error || 'Failed to initialize workspace')
+        }
+      } catch (initError) {
+        console.error('Workspace init error:', initError)
+        // Continue anyway - workspace might already be initialized
+      }
+
       if (onCreateFolder) {
         onCreateFolder(folderPath)
       } else {
@@ -297,11 +333,30 @@ export default function IDESidebar({
       }
     } catch (error) {
       console.error('Create folder error:', error)
-      alert('Failed to create folder')
+      alert(`Failed to create folder: ${error instanceof Error ? error.message : 'Unknown error'}`)
     } finally {
       setCreatingFolder(null)
       setNewItemName('')
     }
+  }
+
+  // Handle refresh for specific folder
+  const handleRefreshFolder = (folderPath: string) => {
+    onFilesChange?.()
+  }
+
+  // Handle collapse all children of a folder
+  const handleCollapseFolder = (folderPath: string) => {
+    setExpandedPaths((prev) => {
+      const next = new Set(prev)
+      // Remove all paths that start with this folder path
+      for (const path of prev) {
+        if (path.startsWith(folderPath + '/')) {
+          next.delete(path)
+        }
+      }
+      return next
+    })
   }
 
   const getFileIcon = (path: string) => {
@@ -314,11 +369,12 @@ export default function IDESidebar({
     const isSelected = selectedFile === node.path
     const isRenaming = renamingPath === node.path
     const hasChildren = node.children && node.children.length > 0
+    const isHovered = hoveredFolder === node.path && node.type === 'directory'
 
     return (
       <div key={node.path}>
         <div
-          className={`flex items-center px-2 py-1 text-sm cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-800 ${
+          className={`group flex items-center px-2 py-1 text-sm cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-800 ${
             isSelected ? 'bg-blue-100 dark:bg-blue-900/30' : ''
           } ${
             aiModifiedFiles.has(node.path) ? 'bg-green-50 dark:bg-green-900/20 border-l-2 border-green-500' : ''
@@ -330,6 +386,14 @@ export default function IDESidebar({
             } else {
               onFileSelect(node.path)
             }
+          }}
+          onMouseEnter={() => {
+            if (node.type === 'directory') {
+              setHoveredFolder(node.path)
+            }
+          }}
+          onMouseLeave={() => {
+            setHoveredFolder(null)
           }}
           onContextMenu={(e) => handleContextMenu(e, node.path)}
         >
@@ -345,6 +409,89 @@ export default function IDESidebar({
                 <span className="w-4 mr-1" />
               )}
               <FiFolder className="w-4 h-4 mr-1.5 text-blue-500 flex-shrink-0" />
+              {/* Folder name - always visible */}
+              {isRenaming && renamingPath === node.path ? (
+                <input
+                  type="text"
+                  value={renameValue}
+                  onChange={(e) => setRenameValue(e.target.value)}
+                  onBlur={() => {
+                    if (renameValue && renameValue !== node.name) {
+                      handleRename(node.path, renameValue)
+                    } else {
+                      setRenamingPath(null)
+                      setRenameValue('')
+                    }
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      if (renameValue && renameValue !== node.name) {
+                        handleRename(node.path, renameValue)
+                      } else {
+                        setRenamingPath(null)
+                        setRenameValue('')
+                      }
+                    } else if (e.key === 'Escape') {
+                      setRenamingPath(null)
+                      setRenameValue('')
+                    }
+                  }}
+                  autoFocus
+                  className="flex-1 px-1 py-0.5 text-sm border border-blue-500 rounded bg-white dark:bg-gray-800"
+                  onClick={(e) => e.stopPropagation()}
+                />
+              ) : (
+                <span className="flex-1 truncate">{node.name}</span>
+              )}
+              {/* VS Code-style action buttons (shown on hover) */}
+              {isHovered && !isRenaming && (
+                <div className="flex items-center gap-1 ml-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setCreatingFile(node.path)
+                      setNewItemName('')
+                    }}
+                    className="p-1 rounded hover:bg-gray-300 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400"
+                    title="New File"
+                  >
+                    <FiFile className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setCreatingFolder(node.path)
+                      setNewItemName('')
+                    }}
+                    className="p-1 rounded hover:bg-gray-300 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400"
+                    title="New Folder"
+                  >
+                    <FiFolder className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleRefreshFolder(node.path)
+                    }}
+                    className="p-1 rounded hover:bg-gray-300 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400"
+                    title="Refresh Explorer"
+                  >
+                    <FiRefreshCw className="w-3.5 h-3.5" />
+                  </button>
+                  {hasChildren && isExpanded && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleCollapseFolder(node.path)
+                      }}
+                      className="p-1 rounded hover:bg-gray-300 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400"
+                      title="Collapse Folders in Explorer"
+                    >
+                      <FiMinimize2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              )}
             </>
           ) : (
             <>
@@ -353,38 +500,43 @@ export default function IDESidebar({
               <span className="w-1.5" />
             </>
           )}
-          {isRenaming ? (
-            <input
-              type="text"
-              value={renameValue}
-              onChange={(e) => setRenameValue(e.target.value)}
-              onBlur={() => {
-                if (renameValue && renameValue !== node.name) {
-                  handleRename(node.path, renameValue)
-                } else {
-                  setRenamingPath(null)
-                  setRenameValue('')
-                }
-              }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  if (renameValue && renameValue !== node.name) {
-                    handleRename(node.path, renameValue)
-                  } else {
-                    setRenamingPath(null)
-                    setRenameValue('')
-                  }
-                } else if (e.key === 'Escape') {
-                  setRenamingPath(null)
-                  setRenameValue('')
-                }
-              }}
-              autoFocus
-              className="flex-1 px-1 py-0.5 text-sm border border-blue-500 rounded bg-white dark:bg-gray-800"
-              onClick={(e) => e.stopPropagation()}
-            />
-          ) : (
-            <span className="flex-1 truncate">{node.name}</span>
+          {/* File name (for files only, folders already have name above) */}
+          {node.type === 'file' && (
+            <>
+              {isRenaming && renamingPath === node.path ? (
+                <input
+                  type="text"
+                  value={renameValue}
+                  onChange={(e) => setRenameValue(e.target.value)}
+                  onBlur={() => {
+                    if (renameValue && renameValue !== node.name) {
+                      handleRename(node.path, renameValue)
+                    } else {
+                      setRenamingPath(null)
+                      setRenameValue('')
+                    }
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      if (renameValue && renameValue !== node.name) {
+                        handleRename(node.path, renameValue)
+                      } else {
+                        setRenamingPath(null)
+                        setRenameValue('')
+                      }
+                    } else if (e.key === 'Escape') {
+                      setRenamingPath(null)
+                      setRenameValue('')
+                    }
+                  }}
+                  autoFocus
+                  className="flex-1 px-1 py-0.5 text-sm border border-blue-500 rounded bg-white dark:bg-gray-800"
+                  onClick={(e) => e.stopPropagation()}
+                />
+              ) : (
+                <span className="flex-1 truncate">{node.name}</span>
+              )}
+            </>
           )}
         </div>
         {node.type === 'directory' && isExpanded && hasChildren && (

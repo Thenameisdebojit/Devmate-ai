@@ -157,13 +157,13 @@ Remember to output ONLY valid JSON in the specified format.`
       throw new Error('Invalid project structure: missing files array')
     }
 
-    // Filter out empty files and validate
+    // Filter and validate files (allow empty content for new files)
     const validFiles = projectData.files
       .map((f: any) => ({
         path: typeof f === 'string' ? f : f.path || '',
         content: typeof f === 'string' ? '' : (f.content || '').trim()
       }))
-      .filter((f: any) => f.path && f.content) // Only include files with both path and content
+      .filter((f: any) => f.path) // Only require path, content can be empty
 
     if (validFiles.length === 0) {
       throw new Error('No valid files were generated. Please try again with a more specific prompt.')
