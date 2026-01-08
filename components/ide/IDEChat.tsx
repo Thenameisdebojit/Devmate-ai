@@ -1,40 +1,103 @@
 'use client'
 
+/**
+ * PHASE 1: Command-Driven Chat
+ * 
+ * Refactored to use CommandBar instead of free-form input.
+ * Messages are session-scoped (projectId + domain).
+ */
+
 import { useState, useRef, useEffect } from 'react'
 import AIMessagePanel from '@/app/components/AppGenerator/AIMessagePanel'
+import IDECommandBar, { type CommandAction } from './IDECommandBar'
+import ConfidenceIndicator from './ConfidenceIndicator'
+import AgentStateIndicator from './AgentStateIndicator'
+import type { ExecutionIntent } from '@/lib/ide/IntentBuilder'
+import type { ConfidenceReport } from '@/core/workspace/AgentConfidenceEngine'
 
 interface IDEChatProps {
   messages: any[]
-  confidenceReport?: any
-  onSend: (prompt: string) => void
+  confidenceReport?: ConfidenceReport // PHASE 6: Typed confidence report
+  onCommand: (intent: ExecutionIntent) => void // Changed from onSend to onCommand
   onPlanApproved?: (planId: string) => void
   onStepApproved?: (planId: string, stepId: string) => void
   className?: string
-  disabled?: boolean // TASK 2: Disable until workspace initialized
+  disabled?: boolean
+  isProcessing?: boolean
+  agentState?: 'idle' | 'thinking' | 'acting' | 'done' | 'error' // PHASE 7: Agent state
+  agentMessage?: string // PHASE 7: Current agent action message
 }
 
 export default function IDEChat({
   messages,
   confidenceReport,
-  onSend,
+  onCommand,
   onPlanApproved,
   onStepApproved,
   className,
-  disabled = false, // TASK 2: Disable until workspace initialized
+  disabled = false,
+  isProcessing = false,
+  agentState = 'idle',
+  agentMessage,
 }: IDEChatProps) {
-  const [input, setInput] = useState('')
-  const inputRef = useRef<HTMLInputElement>(null)
+  const messagesEndRef = useRef<HTMLDivElement>(null)
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (input.trim() && !disabled) {
-      onSend(input.trim())
-      setInput('')
+  // Auto-scroll to bottom on new messages
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages])
+
+  const handleCommand = async (action: CommandAction, input?: string) => {
+    if (disabled || isProcessing) return
+
+    try {
+      // Import IntentBuilder dynamically to avoid circular deps
+      const { IntentBuilder } = await import('@/lib/ide/IntentBuilder')
+      
+      // Ensure input is valid - use default if empty
+      const inputValue = input?.trim() || ''
+      
+      // Build intent - IntentBuilder handles empty descriptions
+      const intent = IntentBuilder.build(action, inputValue)
+      const validation = IntentBuilder.validate(intent)
+
+      if (!validation.valid) {
+        console.error('Invalid intent:', validation.error)
+        // Show error to user
+        onCommand({
+          type: 'explain',
+          description: `Invalid command: ${validation.error}. Please try again with a valid action.`,
+        } as any)
+        return
+      }
+
+      onCommand(intent)
+    } catch (error) {
+      console.error('Failed to build intent:', error)
+      // Show error to user
+      onCommand({
+        type: 'explain',
+        description: `Failed to process command: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      } as any)
     }
   }
 
   return (
     <div className={`flex flex-col ${className}`}>
+      {/* PHASE 6: Confidence Indicator */}
+      {confidenceReport && (
+        <div className="p-2 border-b border-gray-200 dark:border-gray-800">
+          <ConfidenceIndicator report={confidenceReport} />
+        </div>
+      )}
+
+      {/* PHASE 7: Agent State Indicator */}
+      {(agentState !== 'idle' || agentMessage) && (
+        <div className="px-3 py-2 border-b border-gray-200 dark:border-gray-800">
+          <AgentStateIndicator state={agentState} message={agentMessage} />
+        </div>
+      )}
+
       {/* Chat Messages */}
       <div className="flex-1 min-h-0 overflow-y-auto">
         <AIMessagePanel
@@ -43,29 +106,15 @@ export default function IDEChat({
           onPlanApproved={onPlanApproved}
           onStepApproved={onStepApproved}
         />
+        <div ref={messagesEndRef} />
       </div>
 
-      {/* Chat Input */}
-      <form onSubmit={handleSubmit} className="p-2 border-t border-gray-200 dark:border-gray-800">
-        <div className="flex gap-2">
-          <input
-            ref={inputRef}
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder={disabled ? "Initializing workspace..." : "Ask AI to make changes..."}
-            disabled={disabled}
-            className="flex-1 px-3 py-2 text-sm border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-          />
-          <button
-            type="submit"
-            disabled={disabled}
-            className="px-4 py-2 text-sm font-medium bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            Send
-          </button>
-        </div>
-      </form>
+      {/* Command Bar (replaces free-form input) */}
+      <IDECommandBar
+        onCommand={handleCommand}
+        disabled={disabled}
+        isProcessing={isProcessing}
+      />
     </div>
   )
 }

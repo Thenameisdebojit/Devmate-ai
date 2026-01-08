@@ -80,9 +80,9 @@ export class ContainerManager {
   }
 
   /**
-   * Detect framework from project files
+   * PHASE 5: Detect framework from project files (public)
    */
-  private async detectFramework(projectPath: string): Promise<{
+  async detectFramework(projectPath: string): Promise<{
     type: 'nextjs' | 'vite' | 'react' | 'python' | 'node' | 'unknown'
     buildCommand?: string
     startCommand?: string

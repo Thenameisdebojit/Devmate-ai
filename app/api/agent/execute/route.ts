@@ -1,13 +1,15 @@
 /**
- * Agent Execution API Route
+ * PHASE 2: Agent Execution API Route
  * 
- * Orchestrates agent execution by routing prompts to appropriate handlers.
+ * HARDENED CONTRACT:
+ * - REQUIRES: projectId, sessionId, executionIntent
+ * - REJECTS: raw prompt execution
+ * - FAILS LOUDLY: Clear error messages on invalid input
  * 
  * ARCHITECTURE:
- * - Routes empty workspace → GenerationController (via /api/generate-app)
- * - Routes existing workspace → AgentPlanExecutor (for mutations)
- * - Auto-starts runtime after successful generation/mutation
- * - Streams execution events to client
+ * - Routes by executionIntent.type
+ * - Uses AgentSessionManager for session authority
+ * - Streams structured execution events
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -15,21 +17,19 @@ import { join } from 'path'
 import { promises as fs } from 'fs'
 import { WorkspaceRegistry } from '@/lib/workspace/WorkspaceRegistry'
 import { getAgentExecutionRouter } from '@/core/agent/AgentExecutionRouter'
+import { getAgentSessionManager } from '@/lib/agent/AgentSessionManager'
+import type { ExecutionIntent } from '@/lib/ide/IntentBuilder'
+import { IntentBuilder } from '@/lib/ide/IntentBuilder'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300 // 5 minutes
 
 export async function POST(req: NextRequest) {
   try {
-    const { prompt, projectId } = await req.json()
+    const body = await req.json()
+    const { projectId, sessionId, executionIntent, domain } = body
 
-    if (!prompt) {
-      return NextResponse.json(
-        { error: 'Prompt is required' },
-        { status: 400 }
-      )
-    }
-
+    // PHASE 2: STRICT VALIDATION - Reject requests missing required fields
     if (!projectId) {
       return NextResponse.json(
         { error: 'Project ID is required' },
@@ -37,29 +37,47 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // STRICT: Resolve workspace ONLY via WorkspaceRegistry.get(projectId)
-    // If missing → return 400 with clear error
+    if (!sessionId) {
+      return NextResponse.json(
+        { error: 'Session ID is required' },
+        { status: 400 }
+      )
+    }
+
+    if (!executionIntent) {
+      return NextResponse.json(
+        { error: 'Execution intent is required. Raw prompt execution is no longer supported.' },
+        { status: 400 }
+      )
+    }
+
+    // PHASE 2: Validate execution intent structure
+    const validation = IntentBuilder.validate(executionIntent)
+    if (!validation.valid) {
+      return NextResponse.json(
+        { error: `Invalid execution intent: ${validation.error}` },
+        { status: 400 }
+      )
+    }
+
+    // PHASE 2: Default domain if not provided (for backward compatibility during transition)
+    const sessionDomain = domain || 'app-generator'
+
+    // PHASE 2: Get or create session
+    const sessionManager = getAgentSessionManager()
+    const session = sessionManager.getOrCreateSession(sessionId, projectId, sessionDomain)
+    
+    // PHASE 2: Update session intent
+    sessionManager.updateIntent(sessionId, projectId, sessionDomain, executionIntent)
+
+    // PHASE 2: STRICT: Resolve workspace ONLY via WorkspaceRegistry.get(projectId)
+    // If missing → return 400 with clear error (FAIL LOUDLY)
     let workspace
     let rootPath
-    let fileCount = 0
     
     try {
       workspace = WorkspaceRegistry.get(projectId)
       rootPath = WorkspaceRegistry.getRootPath(projectId)
-      
-      // Count files in workspace (server-side only)
-      try {
-        const entries = await fs.readdir(rootPath, { withFileTypes: true })
-        fileCount = entries.filter(
-          (entry) => entry.isFile() && !entry.name.startsWith('.')
-        ).length
-      } catch (error: any) {
-        if (error.code === 'ENOENT') {
-          fileCount = 0
-        } else {
-          throw error
-        }
-      }
     } catch (error: any) {
       console.error('[api/agent/execute] Workspace not registered:', error.message)
       return NextResponse.json(
@@ -71,46 +89,120 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    console.log('[api/agent/execute] Workspace state:', {
+    if (!workspace) {
+      return NextResponse.json(
+        { 
+          error: `Workspace not found for projectId: ${projectId}. Call /api/workspace/init first.`
+        },
+        { status: 400 }
+      )
+    }
+
+    if (!rootPath) {
+      return NextResponse.json(
+        { 
+          error: `Workspace root path not found for projectId: ${projectId}.`
+        },
+        { status: 400 }
+      )
+    }
+
+    console.log('[api/agent/execute] Execution context:', {
       projectId,
+      sessionId,
+      intentType: executionIntent.type,
       rootPath,
-      fileCount,
       workspaceRegistered: true,
     })
 
-    // Create readable stream for SSE
+    // PHASE 7: Create readable stream for SSE with batching optimization
     const stream = new ReadableStream({
       async start(controller) {
         const encoder = new TextEncoder()
+        let eventBuffer: Array<{ type: string; payload: any }> = []
+        let flushTimer: NodeJS.Timeout | null = null
+
+        // PHASE 7: Batch events for faster rendering (flush every 50ms or when buffer reaches 5 events)
+        const flushEvents = () => {
+          if (eventBuffer.length === 0) return
+          
+          // Send batched events
+          for (const event of eventBuffer) {
+            const data = JSON.stringify(event)
+            controller.enqueue(encoder.encode(`data: ${data}\n\n`))
+          }
+          eventBuffer = []
+          
+          if (flushTimer) {
+            clearTimeout(flushTimer)
+            flushTimer = null
+          }
+        }
 
         const sendEvent = (event: { type: string; payload: any }) => {
-          const data = JSON.stringify(event)
-          controller.enqueue(encoder.encode(`data: ${data}\n\n`))
+          // PHASE 7: Filter out noisy events
+          const noisyEvents = ['EDITOR_CURSOR_MOVED', 'CURSOR_IDLE']
+          if (noisyEvents.includes(event.type)) {
+            return // Skip noisy events
+          }
+
+          eventBuffer.push(event)
+          
+          // Flush immediately if buffer is full or for critical events
+          const criticalEvents = ['AGENT_ERROR', 'AGENT_DONE', 'FILE_CHANGED', 'RUNTIME_EVENT']
+          if (eventBuffer.length >= 5 || criticalEvents.includes(event.type)) {
+            flushEvents()
+          } else {
+            // Schedule flush after 50ms
+            if (!flushTimer) {
+              flushTimer = setTimeout(flushEvents, 50)
+            }
+          }
         }
 
         try {
           const router = getAgentExecutionRouter()
 
-          // Route the prompt with workspace from registry
+          // PHASE 2: Route by executionIntent.type (not prompt)
           await router.run(
             {
-              prompt,
+              executionIntent,
               workspace,
               projectId,
               rootPath,
+              agentSession: session,
             },
             (event) => {
               sendEvent(event)
             }
           )
 
+          // PHASE 7: Flush any remaining events before closing
+          flushEvents()
+          
           // Stream complete
           controller.close()
         } catch (error: any) {
+          // Flush buffer before sending error
+          flushEvents()
+          
+          // Provide detailed error message
+          let errorMessage = error.message || 'Execution failed'
+          
+          // Add context for common errors
+          if (error.message?.includes('Workspace not initialized')) {
+            errorMessage = 'Workspace not initialized. Please refresh the page.'
+          } else if (error.message?.includes('empty')) {
+            errorMessage = `${error.message}. Use "Generate" to create a starter project first.`
+          } else if (error.message?.includes('Invalid execution intent')) {
+            errorMessage = `${error.message}. Please choose an action (Generate / Run / Fix / Explain).`
+          }
+          
           sendEvent({
             type: 'EXECUTION_ERROR',
-            payload: { error: error.message || 'Execution failed' },
+            payload: { error: errorMessage },
           })
+          flushEvents()
           controller.close()
         }
       },

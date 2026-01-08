@@ -117,7 +117,7 @@ export class FileMutationKernel {
       }
     }
 
-    // Create checkpoint if requested
+    // PHASE 4: Create checkpoint if requested (MANDATORY for AI writes)
     let checkpointId: string | undefined
     if (shouldCreateCheckpoint) {
       try {
@@ -128,10 +128,22 @@ export class FileMutationKernel {
           'pre-write'
         )
         checkpointId = checkpoint.id
-      } catch (error) {
+      } catch (error: any) {
+        // PHASE 4: FAIL LOUDLY - No checkpoint = no AI write
         console.error('Failed to create checkpoint:', error)
-        // Continue without checkpoint if it fails
+        return {
+          success: false,
+          appliedChanges: [],
+          failedChanges: changeSet.changes.map((c) => ({
+            change: c,
+            error: `Checkpoint creation failed: ${error.message || 'Unknown error'}. Cannot proceed without checkpoint.`,
+          })),
+          error: `Checkpoint creation failed: ${error.message || 'Unknown error'}. Cannot proceed without checkpoint.`,
+        }
       }
+    } else {
+      // PHASE 4: Warn if checkpoint not requested for AI writes
+      console.warn('[FileMutationKernel] Mutation requested without checkpoint. This should only happen for manual user edits.')
     }
 
     // Apply changes transactionally
@@ -214,12 +226,15 @@ export class FileMutationKernel {
 
     switch (change.type) {
       case 'create':
-        if (!change.fullContent && !change.diff) {
+        // Allow empty strings for fullContent (valid for new files)
+        // Only require fullContent or diff if both are undefined/null
+        if (change.fullContent === undefined && !change.diff) {
           throw new Error('Create requires fullContent or diff')
         }
         // Ensure directory exists
         await fs.mkdir(dirname(fullPath), { recursive: true })
-        const createContent = change.fullContent || this.applyDiff('', change.diff!)
+        // fullContent can be empty string for new files, or use diff
+        const createContent = change.fullContent !== undefined ? change.fullContent : this.applyDiff('', change.diff!)
         await fs.writeFile(fullPath, createContent, 'utf-8')
         break
 
@@ -317,11 +332,13 @@ export class FileMutationKernel {
       }
 
       // Validate content requirements
-      if (change.type === 'create' && !change.fullContent && !change.diff) {
+      // Allow empty strings for create (valid for new files)
+      // Only require fullContent or diff if both are undefined
+      if (change.type === 'create' && change.fullContent === undefined && !change.diff) {
         return { valid: false, error: 'Create requires fullContent or diff' }
       }
 
-      if (change.type === 'modify' && !change.fullContent && !change.diff) {
+      if (change.type === 'modify' && change.fullContent === undefined && !change.diff) {
         return { valid: false, error: 'Modify requires fullContent or diff' }
       }
     }

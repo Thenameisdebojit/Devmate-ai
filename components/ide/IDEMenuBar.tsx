@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { FiFile, FiEdit, FiMousePointer, FiEye, FiArrowRight, FiPlay, FiTerminal, FiHelpCircle } from 'react-icons/fi'
+import { FiFile, FiEdit, FiMousePointer, FiEye, FiArrowRight, FiPlay, FiTerminal, FiHelpCircle, FiFolder, FiRotateCcw } from 'react-icons/fi'
 
 interface IDEMenuBarProps {
   projectId?: string
@@ -40,6 +40,7 @@ interface IDEMenuBarProps {
   onCommandPalette?: () => void
   onWelcome?: () => void
   onAbout?: () => void
+  onRollbackProject?: () => void // PHASE 4: Project rollback
 }
 
 export default function IDEMenuBar({
@@ -79,6 +80,7 @@ export default function IDEMenuBar({
   onCommandPalette,
   onWelcome,
   onAbout,
+  onRollbackProject,
 }: IDEMenuBarProps) {
   const [activeMenu, setActiveMenu] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -367,6 +369,26 @@ export default function IDEMenuBar({
               <MenuSeparator />
               <MenuItem label="Configure Tasks..." />
               <MenuItem label="Configure Default Build Task..." />
+            </div>
+          )}
+        </div>
+
+        {/* PHASE 4: Project Menu */}
+        <div className="relative">
+          <button
+            onClick={(e) => handleMenuClick('project', e)}
+            className={`px-3 py-1 text-sm hover:bg-gray-100 dark:hover:bg-gray-800 rounded flex items-center gap-1 ${
+              activeMenu === 'project' ? 'bg-gray-100 dark:bg-gray-800' : ''
+            }`}
+          >
+            <FiFolder className="w-4 h-4" />
+            <span>Project</span>
+          </button>
+          {activeMenu === 'project' && (
+            <div className="absolute top-full left-0 mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded shadow-lg z-50 min-w-[200px]">
+              <MenuItem label="Rollback to Last Checkpoint" onClick={onRollbackProject} />
+              <MenuSeparator />
+              <MenuItem label="Project Settings..." />
             </div>
           )}
         </div>

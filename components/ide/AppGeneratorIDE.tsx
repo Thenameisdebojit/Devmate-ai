@@ -21,6 +21,7 @@ import IDEMenuBar from './IDEMenuBar'
 import IDESidebar from './IDESidebar'
 import IDECodePlayground from './IDECodePlayground'
 import IDETerminalPanel from './IDETerminalPanel'
+import IDEBottomPanel from './IDEBottomPanel'
 import IDEChat from './IDEChat'
 import IDERuntimeControls from './IDERuntimeControls'
 import IDEActivityBar from './IDEActivityBar'
@@ -28,7 +29,11 @@ import IDESourceControl from './IDESourceControl'
 import IDEResizablePanel from './IDEResizablePanel'
 import IDESettingsPanel, { type EditorSettings } from './IDESettingsPanel'
 import ThemeToggle from '@/app/components/ThemeToggle'
+import ConfirmationDialog from './ConfirmationDialog'
 import { getWorkspaceDaemon as getCoreWorkspaceDaemon, getAgentObserver, getAgentActionHandler, getAgentPlanExecutor, getAgentConfidenceEngine, type AgentPlan } from '@/core/workspace'
+import { sessionManager, type AgentSession } from '@/lib/ide/AgentSession'
+import type { ExecutionIntent } from '@/lib/ide/IntentBuilder'
+import type { ConfidenceReport } from '@/core/workspace/AgentConfidenceEngine'
 
 interface AppGeneratorIDEProps {
   projectId?: string
@@ -41,9 +46,24 @@ export default function AppGeneratorIDE({ projectId: initialProjectId }: AppGene
   const [activeFile, setActiveFile] = useState<string | undefined>()
   const [fileContent, setFileContent] = useState<string>('')
   const [runtimeState, setRuntimeState] = useState<any>(null)
-  const [confidenceReport, setConfidenceReport] = useState<any>(null)
+  const [confidenceReport, setConfidenceReport] = useState<ConfidenceReport | null>(null) // PHASE 6: Typed confidence report
+  const [confirmationDialog, setConfirmationDialog] = useState<{
+    isOpen: boolean
+    intent: ExecutionIntent | null
+    confidenceReport: ConfidenceReport | null
+  }>({
+    isOpen: false,
+    intent: null,
+    confidenceReport: null,
+  })
   const [aiMessages, setAiMessages] = useState<any[]>([])
   const [workspaceInitialized, setWorkspaceInitialized] = useState(false) // TASK 2: Track initialization
+  const [isProcessing, setIsProcessing] = useState(false) // PHASE 1: Track agent execution
+  const [agentState, setAgentState] = useState<'idle' | 'thinking' | 'acting' | 'done' | 'error'>('idle') // PHASE 7: Agent state
+  const [agentMessage, setAgentMessage] = useState<string>('') // PHASE 7: Current agent action
+  const [showBottomPanel, setShowBottomPanel] = useState<boolean>(true) // Bottom panel visibility
+  const [currentDomain, setCurrentDomain] = useState<string>('app-generator') // PHASE 1: Track domain for session scoping
+  const [aiModifiedFiles, setAiModifiedFiles] = useState<Set<string>>(new Set()) // PHASE 1: Track AI-modified files
   const [showSidebar, setShowSidebar] = useState(true)
   const [showTerminal, setShowTerminal] = useState(false) // Terminal hidden by default
   const [showExplorer, setShowExplorer] = useState(true)
@@ -231,6 +251,10 @@ export default function AppGeneratorIDE({ projectId: initialProjectId }: AppGene
       if (payload.path === activeFile) {
         setFileContent(payload.content)
       }
+      // PHASE 1: Track AI-modified files
+      if (payload.modifiedByAI) {
+        setAiModifiedFiles((prev) => new Set(prev).add(payload.path))
+      }
       // TASK D: Refresh file tree on FILE_CHANGED
       loadFiles()
     }
@@ -340,7 +364,40 @@ export default function AppGeneratorIDE({ projectId: initialProjectId }: AppGene
 
   // Handle file save (via API route to avoid client-side Node.js imports)
   const handleFileSave = useCallback(async (filePath: string, content: string) => {
-    if (!projectId) return
+    if (!projectId) {
+      alert('Project ID is required to save files')
+      return
+    }
+
+    // Ensure workspace is initialized before saving
+    if (!workspaceInitialized) {
+      // Try to initialize workspace first
+      try {
+        const initResponse = await fetch('/api/workspace/init', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            projectId,
+            mode: 'app-generator',
+          }),
+        })
+
+        if (!initResponse.ok) {
+          const error = await initResponse.json()
+          throw new Error(error.error || 'Failed to initialize workspace')
+        }
+
+        const initData = await initResponse.json()
+        if (initData.initialized === true) {
+          setWorkspaceInitialized(true)
+        } else {
+          throw new Error('Workspace initialization failed')
+        }
+      } catch (error) {
+        alert(`Cannot save file: Workspace not initialized. ${error instanceof Error ? error.message : 'Unknown error'}`)
+        return
+      }
+    }
 
     try {
       const response = await fetch('/api/runtime/file/save', {
@@ -357,17 +414,22 @@ export default function AppGeneratorIDE({ projectId: initialProjectId }: AppGene
         const data = await response.json()
         if (data.success) {
           setFileContent(content)
+          // Refresh file list to show updated file
+          loadFiles()
         } else {
           console.error('Failed to save file:', data.error)
+          alert(`Failed to save file: ${data.error || 'Unknown error'}`)
         }
       } else {
         const error = await response.json()
         console.error('Failed to save file:', error.error)
+        alert(`Failed to save file: ${error.error || 'Unknown error'}`)
       }
     } catch (error) {
       console.error('Failed to save file:', error)
+      alert(`Failed to save file: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
-  }, [projectId])
+  }, [projectId, workspaceInitialized, loadFiles])
 
   // Load runtime state
   useEffect(() => {
@@ -412,37 +474,132 @@ export default function AppGeneratorIDE({ projectId: initialProjectId }: AppGene
     } as any)
   }, [projectId])
 
-  // Handle user prompt (TASK B: Wire to agent execution API)
-  const handleUserPrompt = useCallback(async (prompt: string) => {
-    if (!projectId) return
+  // PHASE 1: Session-scoped chat initialization
+  useEffect(() => {
+    if (!projectId || !currentDomain) return
 
-    // Add user message
-    setAiMessages((prev) => [
-      ...prev,
-      {
-        id: `msg-${Date.now()}`,
-        type: 'user',
-        content: prompt,
-        timestamp: Date.now(),
-      },
-    ])
+    // Get or create session
+    const session = sessionManager.getSession(currentDomain, projectId) || 
+                    sessionManager.createSession(currentDomain, projectId)
+    
+    // Load messages from session
+    setAiMessages(session.messages.map((msg) => ({
+      id: msg.id,
+      type: msg.type,
+      content: msg.content,
+      timestamp: msg.timestamp,
+      intent: msg.intent,
+      metadata: msg.metadata,
+    })))
+  }, [projectId, currentDomain])
 
-    // Send to agent execution API (TASK B: POST /api/agent/execute)
+  // PHASE 1: Handle command with ExecutionIntent
+  const handleCommand = useCallback(async (intent: ExecutionIntent) => {
+    if (!projectId || !currentDomain) {
+      alert('Project ID is required to execute commands')
+      return
+    }
+
+    // Ensure workspace is initialized before executing agent commands
+    if (!workspaceInitialized) {
+      // Try to initialize workspace first
+      try {
+        setAgentState('thinking')
+        setAgentMessage('Initializing workspace...')
+        
+        const initResponse = await fetch('/api/workspace/init', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            projectId,
+            mode: 'app-generator',
+          }),
+        })
+
+        if (!initResponse.ok) {
+          const error = await initResponse.json()
+          throw new Error(error.error || 'Failed to initialize workspace')
+        }
+
+        const initData = await initResponse.json()
+        if (initData.initialized === true) {
+          setWorkspaceInitialized(true)
+          setAgentState('idle')
+          setAgentMessage('')
+        } else {
+          throw new Error('Workspace initialization failed')
+        }
+      } catch (error) {
+        setAgentState('error')
+        setAgentMessage(`Workspace not initialized: ${error instanceof Error ? error.message : 'Unknown error'}`)
+        const errorMessage = sessionManager.addMessage(currentDomain, projectId, {
+          type: 'error',
+          content: `Cannot execute command: Workspace not initialized. ${error instanceof Error ? error.message : 'Unknown error'}`,
+        })
+        setAiMessages((prev) => [...prev, errorMessage])
+        setIsProcessing(false)
+        setTimeout(() => {
+          setAgentState('idle')
+          setAgentMessage('')
+        }, 5000)
+        return
+      }
+    }
+
+    // PHASE 6: Check confidence before risky actions
+    const { getAgentConfidenceEngine } = await import('@/core/workspace/AgentConfidenceEngine')
+    const confidenceEngine = getAgentConfidenceEngine(projectId)
+    const currentConfidence = confidenceEngine.getCurrentReport()
+    
+    // Check if this is a risky action
+    const isRiskyAction = intent.type === 'mutate' || intent.type === 'fix' || intent.type === 'generate'
+    const needsConfirmation = isRiskyAction && 
+      (currentConfidence.confidenceLevel === 'LOW' || currentConfidence.riskLevel === 'HIGH')
+
+    if (needsConfirmation && currentConfidence.riskLevel === 'HIGH' && currentConfidence.confidenceLevel === 'LOW') {
+      // Show confirmation dialog
+      setConfirmationDialog({
+        isOpen: true,
+        intent,
+        confidenceReport: currentConfidence,
+      })
+      return // Don't proceed until user confirms
+    }
+
+    setIsProcessing(true)
+
+    // Get or create session
+    const session = sessionManager.getSession(currentDomain, projectId) || 
+                    sessionManager.createSession(currentDomain, projectId)
+
+    // Add user message to session
+    const userMessage = sessionManager.addMessage(currentDomain, projectId, {
+      type: 'user',
+      content: intent.description,
+      intent,
+    })
+
+    // Update UI
+    setAiMessages((prev) => [...prev, userMessage])
+
+    // Send to agent execution API with intent
     try {
       const response = await fetch('/api/agent/execute', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          prompt,
           projectId,
+          sessionId: session.id,
+          executionIntent: intent, // PHASE 1: Send intent, not just prompt
         }),
       })
 
       if (!response.ok) {
-        throw new Error('Failed to execute agent')
+        const errorData = await response.json().catch(() => ({ error: 'Failed to execute agent' }))
+        throw new Error(errorData.error || 'Failed to execute agent')
       }
 
-      // Stream execution events (TASK B: Stream agent responses)
+      // Stream execution events
       const reader = response.body?.getReader()
       const decoder = new TextDecoder()
 
@@ -461,37 +618,90 @@ export default function AppGeneratorIDE({ projectId: initialProjectId }: AppGene
                 
                 // Handle execution events
                 switch (event.type) {
+                  case 'AGENT_THINKING':
+                    // PHASE 7: Update agent state
+                    setAgentState('thinking')
+                    setAgentMessage(event.payload.message || 'Analyzing...')
+                    break
+                  case 'AGENT_ACTION':
+                    // PHASE 7: Update agent state
+                    setAgentState('acting')
+                    setAgentMessage(event.payload.details?.message || event.payload.action || 'Working...')
+                    // PHASE 4: Show checkpoint messages
+                    if (event.payload.action === 'create_checkpoint') {
+                      const checkpointMessage = sessionManager.addMessage(currentDomain, projectId, {
+                        type: 'system',
+                        content: `✓ ${event.payload.details.message || 'Checkpoint created'}`,
+                      })
+                      setAiMessages((prev) => [...prev, checkpointMessage])
+                    }
+                    break
+                  case 'AGENT_DONE':
+                    // PHASE 7: Update agent state
+                    setAgentState('done')
+                    setAgentMessage(event.payload.message || 'Completed')
+                    // Auto-reset to idle after 2 seconds
+                    setTimeout(() => {
+                      setAgentState('idle')
+                      setAgentMessage('')
+                    }, 2000)
+                    break
+                  case 'AGENT_ERROR':
+                    // PHASE 7: Update agent state
+                    setAgentState('error')
+                    setAgentMessage(event.payload.error || 'Error occurred')
+                    const errorMsg = sessionManager.addMessage(currentDomain, projectId, {
+                      type: 'error',
+                      content: event.payload.error,
+                    })
+                    setAiMessages((prev) => [...prev, errorMsg])
+                    // Auto-reset to idle after 3 seconds
+                    setTimeout(() => {
+                      setAgentState('idle')
+                      setAgentMessage('')
+                    }, 3000)
+                    break
                   case 'GENERATION_STARTED':
                   case 'GENERATION_PROGRESS':
                   case 'PLAN_PROPOSED':
                   case 'STEP_COMPLETED':
-                    setAiMessages((prev) => [
-                      ...prev,
-                      {
-                        id: `event-${Date.now()}`,
-                        type: 'observation',
-                        content: event.payload.message || JSON.stringify(event.payload),
-                        timestamp: Date.now(),
-                      },
-                    ])
+                    const obsMessage = sessionManager.addMessage(currentDomain, projectId, {
+                      type: 'observation',
+                      content: event.payload.message || JSON.stringify(event.payload),
+                    })
+                    setAiMessages((prev) => [...prev, obsMessage])
                     break
                   case 'EXECUTION_ERROR':
-                    setAiMessages((prev) => [
-                      ...prev,
-                      {
-                        id: `error-${Date.now()}`,
-                        type: 'error',
-                        content: event.payload.error,
-                        timestamp: Date.now(),
-                      },
-                    ])
+                    setAgentState('error')
+                    setAgentMessage(event.payload.error || 'Execution error')
+                    const execErrorMessage = sessionManager.addMessage(currentDomain, projectId, {
+                      type: 'error',
+                      content: event.payload.error,
+                    })
+                    setAiMessages((prev) => [...prev, execErrorMessage])
                     break
                   case 'RUNTIME_STARTED':
-                    // TASK C: Runtime auto-start (already handled by router)
                     setRuntimeState((prev: any) => ({
                       ...prev,
                       status: 'running',
                     }))
+                    break
+                  case 'FILE_CHANGED':
+                    // PHASE 1: Track AI-modified files
+                    if (event.payload.path) {
+                      setAiModifiedFiles((prev) => new Set(prev).add(event.payload.path))
+                    }
+                    // PHASE 5: Schedule runtime restart on file change
+                    if (projectId && runtimeState?.status === 'running') {
+                      fetch('/api/runtime/restart', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ 
+                          projectId,
+                          filePath: event.payload.path,
+                        }),
+                      }).catch(err => console.error('Failed to schedule restart:', err))
+                    }
                     break
                 }
               } catch (e) {
@@ -503,17 +713,34 @@ export default function AppGeneratorIDE({ projectId: initialProjectId }: AppGene
       }
     } catch (error) {
       console.error('Failed to execute agent:', error)
-      setAiMessages((prev) => [
-        ...prev,
-        {
-          id: `error-${Date.now()}`,
-          type: 'error',
-          content: error instanceof Error ? error.message : 'Failed to execute agent',
-          timestamp: Date.now(),
-        },
-      ])
+      
+      // PHASE -1: Provide helpful error messages
+      let errorContent = 'Failed to execute agent'
+      if (error instanceof Error) {
+        errorContent = error.message
+        // Provide context-specific help
+        if (error.message.includes('empty') || error.message.includes('no files')) {
+          errorContent = `${error.message}\n\n💡 Tip: Use "Generate" to create a starter project first.`
+        } else if (error.message.includes('invalid') || error.message.includes('Invalid')) {
+          errorContent = `${error.message}\n\n💡 Tip: Choose an action (Generate / Run / Fix / Explain) and provide a description.`
+        }
+      }
+      
+      const errorMessage = sessionManager.addMessage(currentDomain, projectId, {
+        type: 'error',
+        content: errorContent,
+      })
+      setAiMessages((prev) => [...prev, errorMessage])
+      setAgentState('error')
+      setAgentMessage(errorContent)
+      setTimeout(() => {
+        setAgentState('idle')
+        setAgentMessage('')
+      }, 5000)
+    } finally {
+      setIsProcessing(false)
     }
-  }, [projectId])
+  }, [projectId, currentDomain])
 
   // Menu handlers
   const handleNewFile = useCallback(() => {
@@ -645,11 +872,81 @@ export default function AppGeneratorIDE({ projectId: initialProjectId }: AppGene
     alert('Devmate AI - App Generator IDE\nVersion 2.0.0')
   }, [])
 
+  // PHASE 4: Handle project rollback
+  // PHASE 6: Handle confirmation dialog
+  const handleConfirmAction = useCallback(() => {
+    if (!confirmationDialog.intent) return
+    
+    setConfirmationDialog({ isOpen: false, intent: null, confidenceReport: null })
+    // Proceed with the action
+    handleCommand(confirmationDialog.intent)
+  }, [confirmationDialog.intent, handleCommand])
+
+  const handleCancelAction = useCallback(() => {
+    setConfirmationDialog({ isOpen: false, intent: null, confidenceReport: null })
+  }, [])
+
+  const handleRollbackProject = useCallback(async () => {
+    if (!projectId) {
+      alert('No project selected')
+      return
+    }
+
+    if (!confirm('Rollback entire project to last checkpoint? This will revert all files to their previous state.')) {
+      return
+    }
+
+    try {
+      const response = await fetch('/api/checkpoint/rollback-project', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectId }),
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Failed to rollback project')
+      }
+
+      const data = await response.json()
+      
+      // Add rollback message to chat
+      const rollbackMessage = sessionManager.addMessage(currentDomain, projectId, {
+        type: 'system',
+        content: `✓ Project rolled back to checkpoint. ${data.filesRolledBack?.length || 0} file(s) reverted.`,
+      })
+      setAiMessages((prev) => [...prev, rollbackMessage])
+
+      // Refresh files
+      loadFiles()
+
+      // Clear AI-modified files (they've been rolled back)
+      setAiModifiedFiles(new Set())
+    } catch (error: any) {
+      alert(`Rollback failed: ${error.message}`)
+    }
+  }, [projectId, currentDomain, loadFiles, sessionManager])
+
   return (
     <div className="h-screen flex flex-col bg-gray-50 dark:bg-gray-900">
       {/* Header with Domain Switcher and Theme Toggle */}
       <IDEHeader>
-        <DomainSwitcher currentDomain="app-generator" />
+        <DomainSwitcher 
+          currentDomain={currentDomain}
+          onDomainChange={(newDomain) => {
+            // PHASE 1: Reset UI state on domain switch
+            if (newDomain !== currentDomain && projectId) {
+              // Clear session for old domain
+              sessionManager.clearSession(currentDomain, projectId)
+              // Reset messages
+              setAiMessages([])
+              setAiModifiedFiles(new Set())
+              setIsProcessing(false)
+              // Update domain
+              setCurrentDomain(newDomain)
+            }
+          }}
+        />
         <ThemeToggle />
       </IDEHeader>
 
@@ -682,7 +979,12 @@ export default function AppGeneratorIDE({ projectId: initialProjectId }: AppGene
         onSplitTerminal={handleSplitTerminal}
         onRunTask={handleRunTask}
         onToggleSidebar={() => setShowSidebar(!showSidebar)}
-        onToggleTerminal={() => setShowTerminal(!showTerminal)}
+        onToggleTerminal={() => {
+          setShowBottomPanel(!showBottomPanel)
+          if (!showBottomPanel) {
+            setBottomPanelTab('terminal')
+          }
+        }}
         onToggleExplorer={() => setShowExplorer(!showExplorer)}
         onToggleSearch={() => setShowSearch(!showSearch)}
         onToggleProblems={() => setShowProblems(!showProblems)}
@@ -693,6 +995,7 @@ export default function AppGeneratorIDE({ projectId: initialProjectId }: AppGene
         onCommandPalette={handleCommandPalette}
         onWelcome={handleWelcome}
         onAbout={handleAbout}
+        onRollbackProject={handleRollbackProject}
       />
 
       {/* Main IDE Layout */}
@@ -720,6 +1023,44 @@ export default function AppGeneratorIDE({ projectId: initialProjectId }: AppGene
                 onFileSelect={handleFileSelect}
                 projectId={projectId}
                 onFilesChange={loadFiles}
+                aiModifiedFiles={aiModifiedFiles}
+                onCreateFile={async (filePath: string) => {
+                  try {
+                    const response = await fetch('/api/runtime/file/create', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ projectId, filePath, content: '' }),
+                    })
+                    if (response.ok) {
+                      loadFiles()
+                      handleFileSelect(filePath)
+                    } else {
+                      const error = await response.json()
+                      alert(error.error || 'Failed to create file')
+                    }
+                  } catch (error) {
+                    console.error('Create file error:', error)
+                    alert('Failed to create file')
+                  }
+                }}
+                onCreateFolder={async (folderPath: string) => {
+                  try {
+                    const response = await fetch('/api/runtime/folder/create', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ projectId, folderPath }),
+                    })
+                    if (response.ok) {
+                      loadFiles()
+                    } else {
+                      const error = await response.json()
+                      alert(error.error || 'Failed to create folder')
+                    }
+                  } catch (error) {
+                    console.error('Create folder error:', error)
+                    alert('Failed to create folder')
+                  }
+                }}
               />
             )}
             {activeView === 'search' && (
@@ -755,7 +1096,13 @@ export default function AppGeneratorIDE({ projectId: initialProjectId }: AppGene
             projectId={projectId}
             filePath={activeFile}
             content={fileContent}
-            onSave={(content) => activeFile && handleFileSave(activeFile, content)}
+            onSave={(content) => {
+              if (activeFile) {
+                handleFileSave(activeFile, content)
+              } else {
+                alert('No file selected. Please select a file or create a new one first.')
+              }
+            }}
             onChange={setFileContent}
             editorSettings={editorSettings}
             onRun={(filePath, mode) => {
@@ -780,11 +1127,14 @@ export default function AppGeneratorIDE({ projectId: initialProjectId }: AppGene
               <IDEChat
                 messages={aiMessages}
                 confidenceReport={confidenceReport}
-                onSend={handleUserPrompt}
+                onCommand={handleCommand}
                 onPlanApproved={handlePlanApproved}
                 onStepApproved={handleStepApproved}
                 className="h-full"
                 disabled={!workspaceInitialized}
+                isProcessing={isProcessing}
+                agentState={agentState}
+                agentMessage={agentMessage}
               />
             </div>
 
@@ -798,11 +1148,20 @@ export default function AppGeneratorIDE({ projectId: initialProjectId }: AppGene
         </IDEResizablePanel>
       </div>
 
-      {/* Terminal Panel (Bottom) */}
-      <IDETerminalPanel
+      {/* PHASE 5: Bottom Panel (Terminal / Preview / Console) */}
+      <IDEBottomPanel
         projectId={projectId}
-        isVisible={showTerminal}
-        onClose={() => setShowTerminal(false)}
+        previewUrl={runtimeState?.previewUrl}
+        previewStatus={runtimeState?.previewStatus}
+        runtimeState={runtimeState}
+        buildErrors={runtimeState?.buildErrors || []}
+        onErrorClick={(file, line) => {
+          // Open file at line
+          handleFileSelect(file)
+          // TODO: Navigate to line in editor
+        }}
+        isVisible={showBottomPanel}
+        onClose={() => setShowBottomPanel(false)}
       />
 
       {/* Settings Panel */}
@@ -812,6 +1171,19 @@ export default function AppGeneratorIDE({ projectId: initialProjectId }: AppGene
         settings={editorSettings}
         setSettings={setEditorSettings}
       />
+
+      {/* PHASE 6: Confirmation Dialog for Risky Actions */}
+      {confirmationDialog.confidenceReport && (
+        <ConfirmationDialog
+          isOpen={confirmationDialog.isOpen}
+          title="High Risk Action Detected"
+          message={`The agent wants to ${confirmationDialog.intent?.type || 'perform an action'}, but confidence is low with high risk.`}
+          confidenceReport={confirmationDialog.confidenceReport}
+          actionType={confirmationDialog.intent?.type as any}
+          onConfirm={handleConfirmAction}
+          onCancel={handleCancelAction}
+        />
+      )}
     </div>
   )
 }

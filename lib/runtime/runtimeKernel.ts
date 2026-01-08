@@ -350,13 +350,33 @@ export class RuntimeKernel extends EventEmitter {
       return
     }
 
-    // Detect framework and start appropriate dev server
+    // PHASE 5: Detect framework and start appropriate dev server
     const projectPath = join(process.cwd(), 'runtime-projects', this.projectId)
     
     try {
+      // Use containerManager's framework detection
+      const frameworkInfo = await containerManager.detectFramework(projectPath)
+      
       const packageJsonPath = join(projectPath, 'package.json')
-      const packageJson = JSON.parse(await fs.readFile(packageJsonPath, 'utf-8'))
-      const devCommand = packageJson.scripts?.dev || 'npm run dev'
+      let devCommand: string
+      
+      try {
+        const packageJson = JSON.parse(await fs.readFile(packageJsonPath, 'utf-8'))
+        devCommand = frameworkInfo.startCommand || packageJson.scripts?.dev || packageJson.scripts?.start || 'npm run dev'
+      } catch {
+        devCommand = frameworkInfo.startCommand || 'npm run dev'
+      }
+
+      // PHASE 5: Set expected port from framework detection
+      if (frameworkInfo.port) {
+        const containerPort = containerStatus.port || frameworkInfo.port
+        const previewUrl = `http://localhost:${containerPort}`
+        this.updateState({
+          previewPort: containerPort,
+          previewUrl,
+          previewStatus: 'starting',
+        })
+      }
 
       // Spawn dev server in container
       this.devServerProcess = spawn('docker', ['exec', '-d', containerStatus.id, 'sh', '-c', devCommand], {
@@ -388,22 +408,48 @@ export class RuntimeKernel extends EventEmitter {
   }
 
   /**
-   * Detect preview port from PTY/dev server output
+   * PHASE 5: Detect preview port from PTY/dev server output
+   * Enhanced detection for multiple frameworks
    */
   private detectPreviewPortFromOutput(output: string): void {
-    const match = output.match(this.previewPortDetectionRegex)
-    if (match && match[1]) {
-      const port = parseInt(match[1], 10)
-      if (port >= 3000 && port <= 9999) {
-        // Valid port range
-        const previewUrl = `http://localhost:${port}`
-        
-        if (this.state.previewPort !== port) {
-          this.updateState({
-            previewPort: port,
-            previewUrl,
-            previewStatus: 'running',
-          })
+    // Try multiple regex patterns for different frameworks
+    const patterns = [
+      /(?:Local|ready|listening|running).*?(\d{4,5})/i,
+      /(?:http:\/\/localhost:)(\d{4,5})/i,
+      /(?:http:\/\/127\.0\.0\.1:)(\d{4,5})/i,
+      /(?:port\s+)(\d{4,5})/i,
+      /(?:on\s+port\s+)(\d{4,5})/i,
+    ]
+
+    for (const pattern of patterns) {
+      const match = output.match(pattern)
+      if (match && match[1]) {
+        const port = parseInt(match[1], 10)
+        if (port >= 3000 && port <= 9999) {
+          // PHASE 5: Map container port to preview URL
+          const containerStatus = containerManager.getContainerStatus(this.projectId)
+          const containerPort = containerStatus?.port
+          
+          // Use container port mapping if available, otherwise use detected port
+          const previewPort = containerPort || port
+          const previewUrl = containerPort 
+            ? `http://localhost:${containerPort}` 
+            : `http://localhost:${port}`
+          
+          if (this.state.previewPort !== previewPort) {
+            this.updateState({
+              previewPort: previewPort,
+              previewUrl,
+              previewStatus: 'running',
+            })
+            
+            // Emit preview ready event
+            this.emitRuntimeEvent('PREVIEW_READY', {
+              previewUrl,
+              port: previewPort,
+            })
+          }
+          break
         }
       }
     }
@@ -544,6 +590,54 @@ export class RuntimeKernel extends EventEmitter {
     return this.ptySession !== null && 
            this.ptySession.process !== null && 
            !this.ptySession.process.killed
+  }
+
+  /**
+   * PHASE 5: Restart runtime on file change (debounced)
+   * Only restarts if relevant files changed (e.g., source files, not logs)
+   */
+  scheduleRestart(filePath: string): void {
+    // Only restart for relevant file changes
+    const relevantExtensions = ['.ts', '.tsx', '.js', '.jsx', '.py', '.json', '.html', '.css', '.scss']
+    const isRelevant = relevantExtensions.some(ext => filePath.endsWith(ext))
+    
+    if (!isRelevant) {
+      return // Don't restart for irrelevant files
+    }
+
+    // Clear existing timer
+    if (this.restartDebounceTimer) {
+      clearTimeout(this.restartDebounceTimer)
+    }
+
+    // Schedule restart
+    this.restartDebounceTimer = setTimeout(async () => {
+      if (this.state.status === 'running' && this.devServerProcess) {
+        try {
+          // Stop current dev server
+          if (this.devServerProcess && !this.devServerProcess.killed) {
+            this.devServerProcess.kill('SIGTERM')
+            this.devServerProcess = null
+          }
+
+          // Wait a bit for cleanup
+          await new Promise(resolve => setTimeout(resolve, 500))
+
+          // Restart dev server
+          await this.startDevServer()
+
+          this.emitRuntimeEvent('RUNTIME_RESTARTED', {
+            reason: `File changed: ${filePath}`,
+          })
+        } catch (error: any) {
+          console.error('Failed to restart runtime:', error)
+          this.emitRuntimeEvent('RUNTIME_CRASHED', {
+            error: `Restart failed: ${error.message}`,
+          })
+        }
+      }
+      this.restartDebounceTimer = null
+    }, this.RESTART_DEBOUNCE_MS)
   }
 }
 

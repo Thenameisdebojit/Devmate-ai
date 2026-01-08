@@ -5,6 +5,7 @@ import { useState } from 'react'
 
 interface DomainSwitcherProps {
   currentDomain: string
+  onDomainChange?: (domain: string) => void // PHASE 1: Callback for domain changes
 }
 
 const domains = [
@@ -17,12 +18,17 @@ const domains = [
   { id: 'prompt-eng', label: 'Prompt Engineering', icon: '🪄', route: '/domain/prompt-eng' },
 ]
 
-export default function DomainSwitcher({ currentDomain }: DomainSwitcherProps) {
+export default function DomainSwitcher({ currentDomain, onDomainChange }: DomainSwitcherProps) {
   const router = useRouter()
   const [isOpen, setIsOpen] = useState(false)
   const current = domains.find((d) => d.id === currentDomain) || domains[0]
 
   const handleDomainChange = (domain: typeof domains[0]) => {
+    // PHASE 1: Call onDomainChange callback if provided (for IDE session reset)
+    if (onDomainChange && domain.id !== currentDomain) {
+      onDomainChange(domain.id)
+    }
+    // Navigate to domain route
     router.push(domain.route)
     setIsOpen(false)
   }

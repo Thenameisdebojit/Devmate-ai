@@ -10,7 +10,9 @@ import {
   FiTrash2,
   FiCopy,
   FiDownload,
-  FiRefreshCw
+  FiRefreshCw,
+  FiRotateCcw,
+  FiPlus
 } from 'react-icons/fi'
 import { motion, AnimatePresence } from 'framer-motion'
 
@@ -27,6 +29,9 @@ interface IDESidebarProps {
   onFileSelect: (path: string) => void
   projectId?: string
   onFilesChange?: () => void
+  aiModifiedFiles?: Set<string> // PHASE 1: Track AI-modified files for highlighting
+  onCreateFile?: (path: string) => void
+  onCreateFolder?: (path: string) => void
 }
 
 export default function IDESidebar({ 
@@ -34,12 +39,18 @@ export default function IDESidebar({
   selectedFile, 
   onFileSelect,
   projectId,
-  onFilesChange
+  onFilesChange,
+  aiModifiedFiles = new Set(),
+  onCreateFile,
+  onCreateFolder
 }: IDESidebarProps) {
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set())
   const [contextMenu, setContextMenu] = useState<{ path: string; x: number; y: number } | null>(null)
   const [renamingPath, setRenamingPath] = useState<string | null>(null)
   const [renameValue, setRenameValue] = useState('')
+  const [creatingFile, setCreatingFile] = useState<string | null>(null)
+  const [creatingFolder, setCreatingFolder] = useState<string | null>(null)
+  const [newItemName, setNewItemName] = useState('')
 
   // Build tree structure from flat file list
   const buildTree = useCallback((): FileNode[] => {
@@ -177,6 +188,122 @@ export default function IDESidebar({
     }
   }
 
+  // PHASE 4: Handle file rollback
+  const handleRevertFile = async (path: string) => {
+    if (!projectId) return
+    if (!confirm(`Revert "${path}" to last checkpoint?`)) return
+
+    try {
+      const response = await fetch('/api/checkpoint/rollback-file', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectId, filePath: path }),
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        alert(error.error || 'Failed to revert file')
+        return
+      }
+
+      setContextMenu(null)
+      onFilesChange?.()
+      
+      // Refresh file content if this file is selected
+      if (selectedFile === path) {
+        onFileSelect(path) // Trigger reload
+      }
+    } catch (error) {
+      console.error('Revert file error:', error)
+      alert('Failed to revert file')
+    }
+  }
+
+  // Handle new file creation
+  const handleNewFile = async (parentPath?: string) => {
+    if (!projectId) return
+
+    const fileName = newItemName.trim()
+    if (!fileName) {
+      setCreatingFile(null)
+      setNewItemName('')
+      return
+    }
+
+    const filePath = parentPath ? `${parentPath}/${fileName}` : fileName
+
+    try {
+      if (onCreateFile) {
+        onCreateFile(filePath)
+      } else {
+        const response = await fetch('/api/runtime/file/create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ projectId, filePath, content: '' }),
+        })
+
+        if (!response.ok) {
+          const error = await response.json()
+          alert(error.error || 'Failed to create file')
+          return
+        }
+
+        onFilesChange?.()
+        onFileSelect(filePath) // Open the new file
+      }
+    } catch (error) {
+      console.error('Create file error:', error)
+      alert('Failed to create file')
+    } finally {
+      setCreatingFile(null)
+      setNewItemName('')
+    }
+  }
+
+  // Handle new folder creation
+  const handleNewFolder = async (parentPath?: string) => {
+    if (!projectId) return
+
+    const folderName = newItemName.trim()
+    if (!folderName) {
+      setCreatingFolder(null)
+      setNewItemName('')
+      return
+    }
+
+    const folderPath = parentPath ? `${parentPath}/${folderName}` : folderName
+
+    try {
+      if (onCreateFolder) {
+        onCreateFolder(folderPath)
+      } else {
+        const response = await fetch('/api/runtime/folder/create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ projectId, folderPath }),
+        })
+
+        if (!response.ok) {
+          const error = await response.json()
+          alert(error.error || 'Failed to create folder')
+          return
+        }
+
+        onFilesChange?.()
+        // Expand the parent folder to show the new folder
+        if (parentPath) {
+          setExpandedPaths((prev) => new Set([...prev, parentPath]))
+        }
+      }
+    } catch (error) {
+      console.error('Create folder error:', error)
+      alert('Failed to create folder')
+    } finally {
+      setCreatingFolder(null)
+      setNewItemName('')
+    }
+  }
+
   const getFileIcon = (path: string) => {
     const ext = path.split('.').pop()?.toLowerCase()
     return <FiFile className="w-4 h-4" />
@@ -193,6 +320,8 @@ export default function IDESidebar({
         <div
           className={`flex items-center px-2 py-1 text-sm cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-800 ${
             isSelected ? 'bg-blue-100 dark:bg-blue-900/30' : ''
+          } ${
+            aiModifiedFiles.has(node.path) ? 'bg-green-50 dark:bg-green-900/20 border-l-2 border-green-500' : ''
           }`}
           style={{ paddingLeft: `${8 + level * 16}px` }}
           onClick={() => {
@@ -282,14 +411,73 @@ export default function IDESidebar({
         <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
           Explorer
         </div>
-        <button
-          onClick={() => onFilesChange?.()}
-          className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400"
-          title="Refresh"
-        >
-          <FiRefreshCw className="w-4 h-4" />
-        </button>
+        <div className="flex items-center gap-1">
+          {/* New File Button */}
+          <button
+            onClick={() => {
+              setCreatingFile('')
+              setNewItemName('')
+            }}
+            className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400"
+            title="New File..."
+          >
+            <FiFile className="w-4 h-4" />
+          </button>
+          {/* New Folder Button */}
+          <button
+            onClick={() => {
+              setCreatingFolder('')
+              setNewItemName('')
+            }}
+            className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400"
+            title="New Folder..."
+          >
+            <FiFolder className="w-4 h-4" />
+          </button>
+          {/* Refresh Button */}
+          <button
+            onClick={() => onFilesChange?.()}
+            className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400"
+            title="Refresh"
+          >
+            <FiRefreshCw className="w-4 h-4" />
+          </button>
+        </div>
       </div>
+
+      {/* New File/Folder Input */}
+      {(creatingFile !== null || creatingFolder !== null) && (
+        <div className="px-3 py-2 border-b border-gray-200 dark:border-gray-800">
+          <input
+            type="text"
+            value={newItemName}
+            onChange={(e) => setNewItemName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                if (creatingFile !== null) {
+                  handleNewFile(creatingFile || undefined)
+                } else if (creatingFolder !== null) {
+                  handleNewFolder(creatingFolder || undefined)
+                }
+              } else if (e.key === 'Escape') {
+                setCreatingFile(null)
+                setCreatingFolder(null)
+                setNewItemName('')
+              }
+            }}
+            onBlur={() => {
+              if (creatingFile !== null) {
+                handleNewFile(creatingFile || undefined)
+              } else if (creatingFolder !== null) {
+                handleNewFolder(creatingFolder || undefined)
+              }
+            }}
+            placeholder={creatingFile !== null ? 'File name...' : 'Folder name...'}
+            autoFocus
+            className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+      )}
 
       {/* File Tree */}
       <div className="flex-1 overflow-y-auto">
@@ -340,6 +528,15 @@ export default function IDESidebar({
               >
                 <FiCopy className="w-4 h-4" />
                 Copy Path
+              </button>
+              <div className="border-t border-gray-200 dark:border-gray-700 my-1" />
+              {/* PHASE 4: Revert to last checkpoint */}
+              <button
+                onClick={() => handleRevertFile(contextMenu.path)}
+                className="w-full px-4 py-2 text-left text-sm text-orange-600 dark:text-orange-400 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
+              >
+                <FiRotateCcw className="w-4 h-4" />
+                Revert to Last Checkpoint
               </button>
               <div className="border-t border-gray-200 dark:border-gray-700 my-1" />
               <button
