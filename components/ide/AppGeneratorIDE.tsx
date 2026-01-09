@@ -23,7 +23,6 @@ import IDECodePlayground from './IDECodePlayground'
 import IDETerminalPanel from './IDETerminalPanel'
 import IDEBottomPanel from './IDEBottomPanel'
 import IDEChat from './IDEChat'
-import IDERuntimeControls from './IDERuntimeControls'
 import IDEActivityBar from './IDEActivityBar'
 import IDESourceControl from './IDESourceControl'
 import IDEResizablePanel from './IDEResizablePanel'
@@ -325,8 +324,15 @@ export default function AppGeneratorIDE({ projectId: initialProjectId }: AppGene
     return () => clearInterval(interval)
   }, [projectId])
 
-  // Handle view change
+  // Handle view change - VS Code style: toggle sidebar if clicking active view
   const handleViewChange = (view: 'explorer' | 'search' | 'source-control' | 'run' | 'extensions') => {
+    // If clicking the same active view, toggle sidebar visibility
+    if (activeView === view && showSidebar) {
+      setShowSidebar(false)
+      return
+    }
+    
+    // Otherwise, activate the view and show sidebar
     setActiveView(view)
     if (view === 'explorer') {
       setShowExplorer(true)
@@ -566,6 +572,43 @@ export default function AppGeneratorIDE({ projectId: initialProjectId }: AppGene
       return // Don't proceed until user confirms
     }
 
+    // Ensure workspace is initialized before execution
+    if (!workspaceInitialized) {
+      try {
+        setAgentState('thinking')
+        setAgentMessage('Initializing workspace...')
+        const initResponse = await fetch('/api/workspace/init', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ projectId, mode: 'app-generator' }),
+        })
+
+        if (!initResponse.ok) {
+          const error = await initResponse.json()
+          throw new Error(error.error || 'Failed to initialize workspace')
+        }
+
+        setWorkspaceInitialized(true)
+        setAgentState('idle')
+        setAgentMessage('')
+      } catch (error) {
+        console.error('Workspace initialization error:', error)
+        const errorMessage = sessionManager.addMessage(currentDomain, projectId, {
+          type: 'error',
+          content: `Failed to initialize workspace: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        })
+        setAiMessages((prev) => [...prev, errorMessage])
+        setAgentState('error')
+        setAgentMessage('Workspace initialization failed')
+        setIsProcessing(false)
+        setTimeout(() => {
+          setAgentState('idle')
+          setAgentMessage('')
+        }, 3000)
+        return // Stop execution if initialization fails
+      }
+    }
+
     setIsProcessing(true)
 
     // Get or create session
@@ -691,6 +734,8 @@ export default function AppGeneratorIDE({ projectId: initialProjectId }: AppGene
                     if (event.payload.path) {
                       setAiModifiedFiles((prev) => new Set(prev).add(event.payload.path))
                     }
+                    // Refresh file list to show new/modified files immediately
+                    loadFiles()
                     // PHASE 5: Schedule runtime restart on file change
                     if (projectId && runtimeState?.status === 'running') {
                       fetch('/api/runtime/restart', {
@@ -1118,12 +1163,13 @@ export default function AppGeneratorIDE({ projectId: initialProjectId }: AppGene
           />
         </div>
 
-        {/* Right Sidebar: Chat, Runtime (Resizable) */}
+        {/* Right Sidebar: Chat (Resizable) */}
         <IDEResizablePanel
           defaultWidth={chatWidth}
           minWidth={250}
           maxWidth={600}
           onResize={setChatWidth}
+          resizeHandlePosition="left" // Resize handle on left for right sidebar
         >
           <div className="h-full flex flex-col border-l border-gray-200 dark:border-gray-800">
             {/* AI Chat */}
@@ -1142,12 +1188,6 @@ export default function AppGeneratorIDE({ projectId: initialProjectId }: AppGene
               />
             </div>
 
-            {/* Runtime Controls */}
-            <IDERuntimeControls
-              projectId={projectId}
-              runtimeState={runtimeState}
-              className="h-32 flex-shrink-0 border-t border-gray-200 dark:border-gray-800"
-            />
           </div>
         </IDEResizablePanel>
       </div>

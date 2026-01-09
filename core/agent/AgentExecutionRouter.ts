@@ -287,14 +287,116 @@ export class AgentExecutionRouter {
       const { generateAppDirect } = await import('@/lib/appGenerator')
       
       let generatedProject
+      let aiGenerationFailed = false
       try {
         generatedProject = await generateAppDirect(executionIntent.description)
       } catch (error: any) {
         console.error('[AgentExecutionRouter] Generation error:', error)
-        throw new Error(`Failed to generate code: ${error.message || 'AI generation failed. Please try again with a more specific description.'}`)
+        aiGenerationFailed = true
+        
+        // If AI fails due to quota/API issues, fallback to bootstrap for empty workspace
+        if (fileCount === 0) {
+          onEvent?.({
+            type: 'AGENT_THINKING',
+            payload: { message: 'AI generation unavailable. Creating starter project structure...' },
+          })
+
+          const platform = executionIntent.platform === 'web' ? 'web' : 
+                          executionIntent.platform === 'backend' ? 'node' : 'web'
+          
+          const { BootstrapGenerator } = await import('@/lib/bootstrap/BootstrapGenerator')
+          const bootstrapResult = await BootstrapGenerator.run({
+            projectId,
+            rootPath,
+            platform,
+          })
+
+          if (!bootstrapResult.success) {
+            throw new Error(`Bootstrap failed: ${bootstrapResult.error || 'Unknown error'}`)
+          }
+
+          // Emit FILE_CHANGED events for bootstrap files
+          for (const filePath of bootstrapResult.filesCreated) {
+            onEvent?.({
+              type: 'FILE_CHANGED',
+              payload: { path: filePath },
+            })
+
+            workspace.getEventBus().emit({
+              type: 'FILE_CHANGED',
+              payload: {
+                path: filePath,
+                content: '',
+                modifiedByAI: false,
+              },
+            } as any)
+          }
+
+          onEvent?.({
+            type: 'AGENT_DONE',
+            payload: { 
+              message: `Starter project created (${bootstrapResult.filesCreated.length} files). AI generation is currently unavailable. You can manually edit files or try again later.`,
+              result: { filesCreated: bootstrapResult.filesCreated.length, files: bootstrapResult.filesCreated } 
+            },
+          })
+
+          return // Bootstrap complete
+        } else {
+          // Workspace has files, but AI failed - throw error
+          throw new Error(`AI generation failed: ${error.message || 'Please check your API keys and quota. You can manually edit existing files.'}`)
+        }
       }
 
       if (!generatedProject || !generatedProject.files || generatedProject.files.length === 0) {
+        // If AI returned empty but didn't throw, fallback to bootstrap for empty workspace
+        if (fileCount === 0) {
+          onEvent?.({
+            type: 'AGENT_THINKING',
+            payload: { message: 'No files generated. Creating starter project structure...' },
+          })
+
+          const platform = executionIntent.platform === 'web' ? 'web' : 
+                          executionIntent.platform === 'backend' ? 'node' : 'web'
+          
+          const { BootstrapGenerator } = await import('@/lib/bootstrap/BootstrapGenerator')
+          const bootstrapResult = await BootstrapGenerator.run({
+            projectId,
+            rootPath,
+            platform,
+          })
+
+          if (!bootstrapResult.success) {
+            throw new Error(`Bootstrap failed: ${bootstrapResult.error || 'Unknown error'}`)
+          }
+
+          // Emit FILE_CHANGED events
+          for (const filePath of bootstrapResult.filesCreated) {
+            onEvent?.({
+              type: 'FILE_CHANGED',
+              payload: { path: filePath },
+            })
+
+            workspace.getEventBus().emit({
+              type: 'FILE_CHANGED',
+              payload: {
+                path: filePath,
+                content: '',
+                modifiedByAI: false,
+              },
+            } as any)
+          }
+
+          onEvent?.({
+            type: 'AGENT_DONE',
+            payload: { 
+              message: `Starter project created (${bootstrapResult.filesCreated.length} files). You can now edit files manually.`,
+              result: { filesCreated: bootstrapResult.filesCreated.length, files: bootstrapResult.filesCreated } 
+            },
+          })
+
+          return
+        }
+        
         throw new Error('No files were generated. The AI might need a more specific description. Try: "build a simple calculator website" or "create a todo app"')
       }
 

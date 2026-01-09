@@ -175,11 +175,22 @@ export class FileMutationKernel {
         }
       }
 
-      // Emit FILE_SAVED events for successful changes
+      // Emit FILE_CHANGED and FILE_SAVED events for successful changes
       // Use WorkspaceRegistry to get workspace (never create it here)
       const workspace = WorkspaceRegistry.get(this.projectId)
       for (const change of appliedChanges) {
         if (change.type !== 'delete') {
+          // Emit FILE_CHANGED for UI updates (file list refresh)
+          workspace.getEventBus().emit({
+            type: 'FILE_CHANGED',
+            payload: {
+              path: change.path,
+              content: change.fullContent || '',
+              modifiedByAI: false, // User edits are not AI-modified
+            },
+          } as any)
+          
+          // Emit FILE_SAVED for state tracking
           workspace.getEventBus().emit({
             type: 'FILE_SAVED',
             payload: { path: change.path },

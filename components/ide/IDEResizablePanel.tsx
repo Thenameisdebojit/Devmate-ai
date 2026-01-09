@@ -8,6 +8,7 @@ interface IDEResizablePanelProps {
   minWidth?: number
   maxWidth?: number
   onResize?: (width: number) => void
+  resizeHandlePosition?: 'left' | 'right' // Position of resize handle
 }
 
 export default function IDEResizablePanel({
@@ -16,6 +17,7 @@ export default function IDEResizablePanel({
   minWidth = 200,
   maxWidth = 800,
   onResize,
+  resizeHandlePosition = 'right', // Default to right (for left sidebar)
 }: IDEResizablePanelProps) {
   const [width, setWidth] = useState(defaultWidth)
   const [isResizing, setIsResizing] = useState(false)
@@ -30,7 +32,9 @@ export default function IDEResizablePanel({
       if (!panelRef.current) return
 
       const deltaX = e.clientX - startXRef.current
-      let newWidth = startWidthRef.current + deltaX
+      // For left handle (right sidebar), deltaX is inverted
+      const adjustedDelta = resizeHandlePosition === 'left' ? -deltaX : deltaX
+      let newWidth = startWidthRef.current + adjustedDelta
       newWidth = Math.max(minWidth, Math.min(maxWidth, newWidth))
 
       setWidth(newWidth)
@@ -48,33 +52,63 @@ export default function IDEResizablePanel({
       document.removeEventListener('mousemove', handleMouseMove)
       document.removeEventListener('mouseup', handleMouseUp)
     }
-  }, [isResizing, minWidth, maxWidth, onResize])
+  }, [isResizing, minWidth, maxWidth, onResize, resizeHandlePosition])
 
+  const isLeftHandle = resizeHandlePosition === 'left'
+  
   return (
     <div
       ref={panelRef}
       className="relative flex-shrink-0 flex h-full"
       style={{ width: `${width}px` }}
     >
+      {/* Resize handle on left (for right sidebar) */}
+      {isLeftHandle && (
+        <div
+          className={`flex-shrink-0 w-1 cursor-col-resize hover:bg-blue-500 transition-colors ${
+            isResizing ? 'bg-blue-500' : 'bg-gray-300 dark:bg-gray-700'
+          }`}
+          onMouseDown={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            if (panelRef.current) {
+              startXRef.current = e.clientX
+              startWidthRef.current = panelRef.current.getBoundingClientRect().width
+            } else {
+              startXRef.current = e.clientX
+              startWidthRef.current = width
+            }
+            setIsResizing(true)
+          }}
+          title="Drag to resize"
+        />
+      )}
+      
       <div className="flex-1 min-w-0 min-h-0">
         {children}
       </div>
-      <div
-        className={`flex-shrink-0 w-1 cursor-col-resize hover:bg-blue-500 transition-colors ${
-          isResizing ? 'bg-blue-500' : 'bg-transparent'
-        }`}
-        onMouseDown={(e) => {
-          e.preventDefault()
-          if (panelRef.current) {
-            startXRef.current = e.clientX
-            startWidthRef.current = panelRef.current.getBoundingClientRect().width
-          } else {
-            startXRef.current = e.clientX
-            startWidthRef.current = width
-          }
-          setIsResizing(true)
-        }}
-      />
+      
+      {/* Resize handle on right (for left sidebar) */}
+      {!isLeftHandle && (
+        <div
+          className={`flex-shrink-0 w-1 cursor-col-resize hover:bg-blue-500 transition-colors ${
+            isResizing ? 'bg-blue-500' : 'bg-gray-300 dark:bg-gray-700'
+          }`}
+          onMouseDown={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            if (panelRef.current) {
+              startXRef.current = e.clientX
+              startWidthRef.current = panelRef.current.getBoundingClientRect().width
+            } else {
+              startXRef.current = e.clientX
+              startWidthRef.current = width
+            }
+            setIsResizing(true)
+          }}
+          title="Drag to resize"
+        />
+      )}
     </div>
   )
 }

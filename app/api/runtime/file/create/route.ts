@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { join, dirname } from 'path'
 import { promises as fs } from 'fs'
 import { getFileMutationKernel } from '@/lib/workspace/FileMutationKernel'
+import { WorkspaceRegistry } from '@/lib/workspace/WorkspaceRegistry'
 
 export const runtime = 'nodejs'
 
@@ -23,7 +24,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'File path is required' }, { status: 400 })
     }
 
+    // Ensure workspace is initialized
     const projectPath = join(process.cwd(), 'runtime-projects', projectId)
+    
+    try {
+      WorkspaceRegistry.get(projectId)
+    } catch {
+      // Workspace not registered - initialize it
+      await fs.mkdir(projectPath, { recursive: true })
+      WorkspaceRegistry.register(projectId, projectPath)
+    }
     
     // Ensure parent directory exists
     const fullPath = join(projectPath, filePath)

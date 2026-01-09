@@ -47,7 +47,7 @@ export default function IDEChat({
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  const handleCommand = async (action: CommandAction, input?: string) => {
+  const handleCommand = async (action: CommandAction, input?: string, context?: { type: string; data: any }) => {
     if (disabled || isProcessing) return
 
     try {
@@ -55,7 +55,18 @@ export default function IDEChat({
       const { IntentBuilder } = await import('@/lib/ide/IntentBuilder')
       
       // Ensure input is valid - use default if empty
-      const inputValue = input?.trim() || ''
+      let inputValue = input?.trim() || ''
+      
+      // Handle context - append context info to input
+      if (context) {
+        if (context.type === 'image') {
+          inputValue = `${inputValue} [Image: ${context.data.filename}]`
+        } else if (context.type === 'web') {
+          inputValue = `${inputValue} [Web Search Enabled]`
+        } else if (context.type === 'browser') {
+          inputValue = `${inputValue} [Browser Connected]`
+        }
+      }
       
       // If no input and action is generate, use a default description
       const finalInput = inputValue || (action === 'generate' ? 'Create a new project' : '')
@@ -74,7 +85,9 @@ export default function IDEChat({
         return
       }
 
-      onCommand(intent)
+      // Attach context to intent if provided
+      const intentWithContext = context ? { ...intent, context } : intent
+      onCommand(intentWithContext as any)
     } catch (error) {
       console.error('Failed to build intent:', error)
       // Show error to user

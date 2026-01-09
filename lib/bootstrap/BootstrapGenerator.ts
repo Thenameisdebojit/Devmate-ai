@@ -104,8 +104,8 @@ export class BootstrapGenerator {
         }
       }
 
-      // Get file mutation kernel
-      const mutationKernel = getFileMutationKernel()
+      // Get file mutation kernel with projectId and rootPath
+      const mutationKernel = getFileMutationKernel(projectId, rootPath)
 
       // Generate files based on platform
       let files: Array<{ path: string; content: string }> = []

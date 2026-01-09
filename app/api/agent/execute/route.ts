@@ -70,8 +70,7 @@ export async function POST(req: NextRequest) {
     // PHASE 2: Update session intent
     sessionManager.updateIntent(sessionId, projectId, sessionDomain, executionIntent)
 
-    // PHASE 2: STRICT: Resolve workspace ONLY via WorkspaceRegistry.get(projectId)
-    // If missing → return 400 with clear error (FAIL LOUDLY)
+    // PHASE 2: Auto-initialize workspace if not registered
     let workspace
     let rootPath
     
@@ -79,14 +78,28 @@ export async function POST(req: NextRequest) {
       workspace = WorkspaceRegistry.get(projectId)
       rootPath = WorkspaceRegistry.getRootPath(projectId)
     } catch (error: any) {
-      console.error('[api/agent/execute] Workspace not registered:', error.message)
-      return NextResponse.json(
-        { 
-          error: `Workspace not initialized for projectId: ${projectId}. Call /api/workspace/init first.`,
-          details: error.message
-        },
-        { status: 400 }
-      )
+      // Workspace not registered - auto-initialize it
+      console.log('[api/agent/execute] Workspace not registered, initializing...', projectId)
+      
+      try {
+        const { default: fs } = await import('fs/promises')
+        const { join } = await import('path')
+        
+        rootPath = join(process.cwd(), 'runtime-projects', projectId)
+        await fs.mkdir(rootPath, { recursive: true })
+        
+        workspace = WorkspaceRegistry.register(projectId, rootPath)
+        console.log('[api/agent/execute] Workspace auto-initialized:', { projectId, rootPath })
+      } catch (initError: any) {
+        console.error('[api/agent/execute] Failed to auto-initialize workspace:', initError)
+        return NextResponse.json(
+          { 
+            error: `Failed to initialize workspace for projectId: ${projectId}. ${initError.message}`,
+            details: initError.message
+          },
+          { status: 500 }
+        )
+      }
     }
 
     if (!workspace) {

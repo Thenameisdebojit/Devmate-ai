@@ -624,7 +624,7 @@ export default function IDESidebar({
                 handleNewFolder(creatingFolder || undefined)
               }
             }}
-            placeholder={creatingFile !== null ? 'File name...' : 'Folder name...'}
+            placeholder={creatingFile !== null ? 'File name (e.g., app.js, main.py)...' : 'Folder name...'}
             autoFocus
             className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
           />

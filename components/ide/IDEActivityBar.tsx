@@ -28,9 +28,17 @@ export default function IDEActivityBar({
 }: IDEActivityBarProps) {
   return (
     <div className="w-12 flex-shrink-0 flex flex-col items-center bg-gray-100 dark:bg-gray-950 border-r border-gray-200 dark:border-gray-800">
-      {/* Explorer */}
+      {/* Explorer - Toggle on click */}
       <button
-        onClick={() => onViewChange('explorer')}
+        onClick={() => {
+          // VS Code behavior: if already active, toggle sidebar; otherwise, activate
+          if (activeView === 'explorer') {
+            // Toggle sidebar visibility
+            onViewChange('explorer') // This will be handled by parent to toggle
+          } else {
+            onViewChange('explorer')
+          }
+        }}
         className={`w-full h-12 flex items-center justify-center transition-colors ${
           activeView === 'explorer'
             ? 'text-blue-600 dark:text-blue-400 bg-white dark:bg-gray-900 border-l-2 border-blue-600 dark:border-blue-400'
