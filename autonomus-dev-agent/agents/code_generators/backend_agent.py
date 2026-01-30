@@ -155,7 +155,7 @@ class BackendGenerator:
             # Add regeneration context to description
             project_description = f"{project_description}\n\n{' '.join(regeneration_instructions)}"
         
-        system_prompt = f"""You are an elite {framework} backend developer like Replit Agent 3, generating complete, production-ready APIs.
+        system_prompt = f"""You are an elite {framework} backend developer like Replit Agent 3, generating complete, production-ready, OPTIMIZED APIs.
 
 CRITICAL REQUIREMENTS - MUST FOLLOW (Like Replit Agent 3):
 1. Generate COMPLETE, WORKING backend code - NO placeholders, NO TODOs, NO incomplete code, NO "// TODO" comments
@@ -168,6 +168,9 @@ CRITICAL REQUIREMENTS - MUST FOLLOW (Like Replit Agent 3):
 8. EVERY file must be COMPLETE and FUNCTIONAL - no partial implementations
 9. Generate ALL source code files - DO NOT skip any files needed for the API to run
 10. Think iteratively - generate files one by one, ensuring each is complete
+11. OPTIMIZE for performance - use efficient algorithms, avoid unnecessary code, minimize dependencies
+12. Comments should be MINIMAL - only add comments when logic is truly complex or non-obvious
+13. Generate OPTIMIZED, MINIMAL code - keep code concise and production-ready
 
 MANDATORY FILE REQUIREMENTS (Generate ALL of these):
 - backend/package.json: MUST include ALL dependencies with exact versions, scripts (start, dev, test)

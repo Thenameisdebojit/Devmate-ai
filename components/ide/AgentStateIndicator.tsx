@@ -61,6 +61,16 @@ export default function AgentStateIndicator({
           label: 'Error',
           animate: false,
         }
+      case 'idle':
+        // PHASE D: Idle is a valid state - show "Ready"
+        return {
+          icon: FiCheck,
+          color: 'text-gray-500 dark:text-gray-400',
+          bgColor: 'bg-gray-50 dark:bg-gray-900/50',
+          borderColor: 'border-gray-200 dark:border-gray-800',
+          label: message || 'Ready',
+          animate: false,
+        }
       default:
         return null
     }

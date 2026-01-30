@@ -7,6 +7,7 @@ export interface IUser extends Document {
   avatar?: string
   provider?: string
   providerId?: string
+  role?: 'base_user' | 'super_user' | 'admin'
   createdAt: Date
   updatedAt: Date
 }
@@ -41,6 +42,11 @@ const UserSchema: Schema = new Schema(
     providerId: {
       type: String,
       default: null,
+    },
+    role: {
+      type: String,
+      enum: ['base_user', 'super_user', 'admin'],
+      default: 'base_user',
     },
   },
   {

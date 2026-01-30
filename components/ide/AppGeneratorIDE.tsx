@@ -27,8 +27,13 @@ import IDEActivityBar from './IDEActivityBar'
 import IDESourceControl from './IDESourceControl'
 import IDEResizablePanel from './IDEResizablePanel'
 import IDESettingsPanel, { type EditorSettings } from './IDESettingsPanel'
+import IDEExtensionsPanel from './IDEExtensionsPanel'
 import ThemeToggle from '@/app/components/ThemeToggle'
 import ConfirmationDialog from './ConfirmationDialog'
+import SettingsView from '@/app/views/settings/SettingsView'
+import CommandPalette from '@/app/components/ide/CommandPalette'
+import IDETabBar, { type IDETab } from './IDETabBar'
+import { isDevmateFile } from '@/lib/ide/explorer/ExplorerVisibility'
 import { getWorkspaceDaemon as getCoreWorkspaceDaemon, getAgentObserver, getAgentActionHandler, getAgentPlanExecutor, getAgentConfidenceEngine, type AgentPlan } from '@/core/workspace'
 import { sessionManager, type AgentSession } from '@/lib/ide/AgentSession'
 import type { ExecutionIntent } from '@/lib/ide/IntentBuilder'
@@ -44,6 +49,8 @@ export default function AppGeneratorIDE({ projectId: initialProjectId }: AppGene
   const [files, setFiles] = useState<any[]>([])
   const [activeFile, setActiveFile] = useState<string | undefined>()
   const [fileContent, setFileContent] = useState<string>('')
+  // PHASE 2: Tab management for multiple files + Settings
+  const [editorTabs, setEditorTabs] = useState<IDETab[]>([])
   const [runtimeState, setRuntimeState] = useState<any>(null)
   const [confidenceReport, setConfidenceReport] = useState<ConfidenceReport | null>(null) // PHASE 6: Typed confidence report
   const [confirmationDialog, setConfirmationDialog] = useState<{
@@ -60,18 +67,27 @@ export default function AppGeneratorIDE({ projectId: initialProjectId }: AppGene
   const [isProcessing, setIsProcessing] = useState(false) // PHASE 1: Track agent execution
   const [agentState, setAgentState] = useState<'idle' | 'thinking' | 'acting' | 'done' | 'error'>('idle') // PHASE 7: Agent state
   const [agentMessage, setAgentMessage] = useState<string>('') // PHASE 7: Current agent action
+  
+  // PHASE D: Workspace Stage (UX truth, not backend state)
+  type WorkspaceStage = 'empty' | 'bootstrapped' | 'generated' | 'running' | 'error'
+  const [workspaceStage, setWorkspaceStage] = useState<WorkspaceStage>('empty')
   const [showBottomPanel, setShowBottomPanel] = useState<boolean>(true) // Bottom panel visibility
+  const [bottomPanelTab, setBottomPanelTab] = useState<'terminal' | 'preview' | 'console' | 'problems'>('terminal')
+  const [diagnostics, setDiagnostics] = useState<any[]>([])
   const [currentDomain, setCurrentDomain] = useState<string>('app-generator') // PHASE 1: Track domain for session scoping
   const [aiModifiedFiles, setAiModifiedFiles] = useState<Set<string>>(new Set()) // PHASE 1: Track AI-modified files
   const [showSidebar, setShowSidebar] = useState(true)
   const [showTerminal, setShowTerminal] = useState(false) // Terminal hidden by default
   const [showExplorer, setShowExplorer] = useState(true)
+  const [showChat, setShowChat] = useState(true) // Chat panel visibility
+  const [splitEditor, setSplitEditor] = useState(false) // Split editor mode
   const [showSearch, setShowSearch] = useState(false)
   const [showProblems, setShowProblems] = useState(false)
   const [showOutput, setShowOutput] = useState(false)
   const [showDebugConsole, setShowDebugConsole] = useState(false)
   const [wordWrap, setWordWrap] = useState(false)
-  const [activeView, setActiveView] = useState<'explorer' | 'search' | 'source-control' | 'run' | 'extensions'>('explorer')
+  const [activeView, setActiveView] = useState<'explorer' | 'search' | 'source-control' | 'run' | 'extensions' | 'settings'>('explorer')
+  const [showCommandPalette, setShowCommandPalette] = useState(false)
   const [sidebarWidth, setSidebarWidth] = useState(256)
   const [chatWidth, setChatWidth] = useState(384)
   const [gitStatus, setGitStatus] = useState<any>(null)
@@ -137,6 +153,13 @@ export default function AppGeneratorIDE({ projectId: initialProjectId }: AppGene
         // Only enable UI after workspace is initialized
         if (data.initialized === true) {
           setWorkspaceInitialized(true)
+          // PHASE D: Derive initial workspace stage from file count
+          const fileCount = data.fileCount || 0
+          if (fileCount === 0) {
+            setWorkspaceStage('empty')
+          } else {
+            setWorkspaceStage('bootstrapped') // Has files, assume bootstrapped
+          }
           console.log('[AppGeneratorIDE] Workspace initialized:', data)
         } else {
           throw new Error('Workspace initialization failed')
@@ -158,20 +181,123 @@ export default function AppGeneratorIDE({ projectId: initialProjectId }: AppGene
     initializeWorkspace()
   }, [projectId])
 
-  // TASK 7: Load files (only after workspace initialized) - MOVED BEFORE useEffect to fix ReferenceError
-  const loadFiles = useCallback(async () => {
-    if (!projectId || !workspaceInitialized) return
-
-    try {
-      const response = await fetch(`/api/runtime/file/list?projectId=${projectId}`)
-      if (response.ok) {
-        const data = await response.json()
-        setFiles(data.files || [])
+  // Listen for diagnostics updates from compiler/build system
+  useEffect(() => {
+    const handleDiagnosticsUpdate = (event: CustomEvent) => {
+      if (event.detail.projectId === projectId) {
+        const newDiagnostics = event.detail.diagnostics || []
+        setDiagnostics(newDiagnostics)
+        console.log('[AppGeneratorIDE] Diagnostics updated:', newDiagnostics.length, 'items')
       }
-    } catch (error) {
-      console.error('Failed to load files:', error)
     }
-  }, [projectId, workspaceInitialized])
+
+    window.addEventListener('diagnostics-updated', handleDiagnosticsUpdate as EventListener)
+    return () => {
+      window.removeEventListener('diagnostics-updated', handleDiagnosticsUpdate as EventListener)
+    }
+  }, [projectId])
+
+  // PHASE D: Helper function for context-aware error messages
+  const getContextAwareErrorMessage = (
+    errorMessage: string,
+    stage: WorkspaceStage,
+    fileCount: number,
+    intentType?: string
+  ): string => {
+    // Replace generic "Failed to execute agent" with context-aware messages
+    if (errorMessage.includes('Failed to execute agent') || errorMessage.includes('execute agent')) {
+      if (fileCount === 0) {
+        return 'No files exist yet. Create a project first by describing what you want to build.'
+      }
+      if (intentType === 'fix') {
+        return 'Nothing to fix — your project has no errors.'
+      }
+      if (intentType === 'run' && stage !== 'running') {
+        return 'Runtime isn\'t running yet. Click Run to start your app.'
+      }
+      return 'An error occurred. Please try again or describe what you want to build.'
+    }
+    
+    // Context-specific error handling
+    if (errorMessage.includes('empty') || errorMessage.includes('no files')) {
+      return 'No files exist yet. Create a project first by describing what you want to build.'
+    }
+    if (errorMessage.includes('Project creation is handled by the IDE')) {
+      return 'Project creation is handled automatically. Just describe what you want to build.'
+    }
+    if (errorMessage.includes('Nothing to fix')) {
+      return 'Nothing to fix — your project has no errors.'
+    }
+    
+    return errorMessage
+  }
+
+  // PHASE E: Debounced file tree refresh to prevent excessive API calls
+  const loadFilesDebounceRef = useRef<NodeJS.Timeout | null>(null)
+  const loadFiles = useCallback(async () => {
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/fe742378-fb51-48f7-9ab2-5f48302b4b88',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AppGeneratorIDE.tsx:237',message:'loadFiles called',data:{hasProjectId:!!projectId,projectId:projectId||'null',workspaceInitialized},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+    // #endregion
+
+    if (!projectId) {
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/fe742378-fb51-48f7-9ab2-5f48302b4b88',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AppGeneratorIDE.tsx:242',message:'loadFiles early return - no projectId',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+      // #endregion
+      console.warn('[AppGeneratorIDE] loadFiles: Early return - no projectId')
+      return
+    }
+
+    // Don't require workspaceInitialized - files might exist even if workspace isn't fully initialized
+    // This allows file listing to work after folder uploads even if initialization is pending
+    if (!workspaceInitialized) {
+      console.warn('[AppGeneratorIDE] loadFiles: Workspace not initialized, but proceeding anyway (files may have been uploaded)')
+    }
+
+    // PHASE E: Debounce file tree refresh (300ms)
+    if (loadFilesDebounceRef.current) {
+      clearTimeout(loadFilesDebounceRef.current)
+    }
+    
+    loadFilesDebounceRef.current = setTimeout(async () => {
+      try {
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/fe742378-fb51-48f7-9ab2-5f48302b4b88',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AppGeneratorIDE.tsx:250',message:'Fetching file list',data:{url:`/api/runtime/file/list?projectId=${projectId}`},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+        // #endregion
+        const response = await fetch(`/api/runtime/file/list?projectId=${projectId}`)
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/fe742378-fb51-48f7-9ab2-5f48302b4b88',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AppGeneratorIDE.tsx:252',message:'File list response received',data:{ok:response.ok,status:response.status},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+        // #endregion
+        if (response.ok) {
+          const data = await response.json()
+          const regularFiles = data.files || []
+          // #region agent log
+          fetch('http://127.0.0.1:7242/ingest/fe742378-fb51-48f7-9ab2-5f48302b4b88',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AppGeneratorIDE.tsx:256',message:'Files loaded',data:{fileCount:regularFiles.length,firstFewFiles:regularFiles.slice(0,5).map(f=>f.path)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+          // #endregion
+          
+          // PHASE 2: Virtual documents removed - use Settings View instead
+          setFiles(regularFiles)
+          
+          // PHASE D: Update workspace stage based on file count (excluding virtual docs)
+          const fileCount = regularFiles.length
+          if (fileCount === 0) {
+            setWorkspaceStage('empty')
+          } else if (workspaceStage === 'empty') {
+            setWorkspaceStage('bootstrapped')
+          }
+        } else {
+          // #region agent log
+          const errorText = await response.text().catch(()=>'unknown')
+          fetch('http://127.0.0.1:7242/ingest/fe742378-fb51-48f7-9ab2-5f48302b4b88',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AppGeneratorIDE.tsx:264',message:'File list API error',data:{status:response.status,error:errorText},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+          // #endregion
+        }
+      } catch (error) {
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/fe742378-fb51-48f7-9ab2-5f48302b4b88',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AppGeneratorIDE.tsx:267',message:'loadFiles exception',data:{error:error instanceof Error?error.message:'unknown'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+        // #endregion
+        console.error('Failed to load files:', error)
+      }
+    }, 300)
+  }, [projectId, workspaceInitialized, workspaceStage])
 
   // Initialize workspace daemon (only after workspace is initialized)
   useEffect(() => {
@@ -296,12 +422,55 @@ export default function AppGeneratorIDE({ projectId: initialProjectId }: AppGene
 
   // Listen for folder upload events
   useEffect(() => {
-    const handleFolderUploaded = () => {
-      loadFiles()
+    const handleFolderUploaded = (event: CustomEvent) => {
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/fe742378-fb51-48f7-9ab2-5f48302b4b88',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AppGeneratorIDE.tsx:392',message:'workspace-folder-uploaded event received',data:{projectId:event.detail?.projectId||projectId||'null',workspaceInitialized,hasProjectId:!!projectId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+      // #endregion
+      console.log('[AppGeneratorIDE] Folder uploaded event received, reloading files...', { workspaceInitialized, projectId, eventProjectId: event.detail?.projectId })
+      
+      // If workspace not initialized, try to initialize it first, then load files
+      if (!workspaceInitialized && projectId) {
+        console.log('[AppGeneratorIDE] Workspace not initialized, attempting to initialize...')
+        // Try to initialize workspace
+        fetch('/api/workspace/init', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ projectId, mode: 'app-generator' }),
+        })
+          .then(async (response) => {
+            if (response.ok) {
+              const data = await response.json()
+              if (data.initialized) {
+                setWorkspaceInitialized(true)
+                // Wait a bit for state to update, then load files
+                setTimeout(() => {
+                  console.log('[AppGeneratorIDE] Workspace initialized, loading files...')
+                  loadFiles()
+                }, 200)
+              } else {
+                // Still try to load files even if initialization fails
+                console.warn('[AppGeneratorIDE] Workspace initialization failed, but trying to load files anyway...')
+                loadFiles()
+              }
+            } else {
+              // Still try to load files
+              console.warn('[AppGeneratorIDE] Workspace initialization request failed, but trying to load files anyway...')
+              loadFiles()
+            }
+          })
+          .catch((error) => {
+            console.error('[AppGeneratorIDE] Workspace initialization error:', error)
+            // Still try to load files
+            loadFiles()
+          })
+      } else {
+        // Workspace is initialized, just load files
+        loadFiles()
+      }
     }
-    window.addEventListener('workspace-folder-uploaded', handleFolderUploaded)
-    return () => window.removeEventListener('workspace-folder-uploaded', handleFolderUploaded)
-  }, [loadFiles])
+    window.addEventListener('workspace-folder-uploaded', handleFolderUploaded as EventListener)
+    return () => window.removeEventListener('workspace-folder-uploaded', handleFolderUploaded as EventListener)
+  }, [loadFiles, workspaceInitialized, projectId])
 
   // Fetch Git status
   useEffect(() => {
@@ -324,8 +493,55 @@ export default function AppGeneratorIDE({ projectId: initialProjectId }: AppGene
     return () => clearInterval(interval)
   }, [projectId])
 
+  // PHASE 2: Handle opening Settings View as a tab (NOT as a file)
+  const openSettings = useCallback(() => {
+    const settingsTabPath = 'Settings'
+    
+    setEditorTabs(prev => {
+      // Check if Settings tab already exists
+      const existingTab = prev.find(tab => tab.path === settingsTabPath && tab.type === 'settings')
+      if (existingTab) {
+        // Switch to existing Settings tab
+        setActiveFile(settingsTabPath)
+        return prev
+      }
+      
+      // Add Settings as a new tab
+      const newTabs = [
+        ...prev,
+        {
+          path: settingsTabPath,
+          type: 'settings' as const,
+        }
+      ]
+      
+      // Switch to Settings tab
+      setActiveFile(settingsTabPath)
+      setActiveView('explorer') // Reset view to explorer when opening settings
+      return newTabs
+    })
+  }, [])
+
+  // PHASE 2: Handle Command Palette
+  const handleOpenCommandPalette = useCallback(() => {
+    setShowCommandPalette(true)
+  }, [])
+
   // Handle view change - VS Code style: toggle sidebar if clicking active view
-  const handleViewChange = (view: 'explorer' | 'search' | 'source-control' | 'run' | 'extensions') => {
+  const handleViewChange = (view: 'explorer' | 'search' | 'source-control' | 'run' | 'extensions' | 'settings') => {
+    // PHASE 2: If clicking Settings, open Settings View as a tab (NOT a file)
+    if (view === 'settings') {
+      openSettings()
+      return
+    }
+    
+    // PHASE F-4: If clicking Extensions, open extensions panel (not as file anymore)
+    if (view === 'extensions') {
+      setActiveView('extensions')
+      setShowSidebar(true)
+      return
+    }
+    
     // If clicking the same active view, toggle sidebar visibility
     if (activeView === view && showSidebar) {
       setShowSidebar(false)
@@ -347,31 +563,157 @@ export default function AppGeneratorIDE({ projectId: initialProjectId }: AppGene
     setShowSidebar(true)
   }
 
-  // Load file content
+  // PHASE 2: Load file content - PREVENT .devmate files from opening, update tab content
   const loadFileContent = useCallback(async (filePath: string) => {
     if (!projectId) return
 
+    // PHASE 2: HARD RULE - .devmate files must NEVER open as editable source
+    if (isDevmateFile(filePath) || filePath.startsWith('.devmate/') || filePath === '.devmate') {
+      console.warn(`[AppGeneratorIDE] Blocked attempt to open .devmate file: ${filePath}. Use Settings View instead.`)
+      // If user tries to open settings.json, open Settings View instead
+      if (filePath.includes('settings')) {
+        openSettings()
+      }
+      return
+    }
+
     try {
+      // Load regular file only
       const response = await fetch(`/api/runtime/file/read?projectId=${projectId}&path=${encodeURIComponent(filePath)}`)
       if (response.ok) {
         const data = await response.json()
-        setFileContent(data.content || '')
+        const content = data.content || ''
+        
+        // Update file content state
+        setFileContent(content)
+        
+        // Update tab content
+        setEditorTabs(prev => prev.map(tab => 
+          tab.path === filePath && tab.type === 'file'
+            ? { ...tab, content }
+            : tab
+        ))
       }
     } catch (error) {
       console.error('Failed to load file content:', error)
     }
-  }, [projectId])
-
-  // Handle file selection
-  const handleFileSelect = useCallback((filePath: string) => {
-    setActiveFile(filePath)
-    loadFileContent(filePath)
+  }, [projectId, openSettings, editorTabs])
+  
+  // PHASE 2: Handle tab selection
+  const handleTabSelect = useCallback((tabPath: string) => {
+    setActiveFile(tabPath)
+    
+    // For file tabs, load content if not already loaded or if switching tabs
+    setEditorTabs(prev => {
+      const tab = prev.find(t => t.path === tabPath)
+      if (tab && tab.type === 'file') {
+        // Try to get content from tab if it exists
+        if ('content' in tab && tab.content !== undefined) {
+          setFileContent(tab.content)
+        } else {
+          // Load content if not available
+          loadFileContent(tabPath)
+        }
+      }
+      return prev
+    })
+  }, [loadFileContent])
+  
+  // PHASE 2: Handle tab close
+  const handleTabClose = useCallback((tabPath: string) => {
+    setEditorTabs(prev => {
+      const remainingTabs = prev.filter(tab => tab.path !== tabPath)
+      
+      // Check if we're closing the active tab using functional state update
+      setActiveFile(currentActive => {
+        if (currentActive === tabPath) {
+          // If closing the active tab, switch to another tab
+          if (remainingTabs.length > 0) {
+            // Switch to the tab at the same index, or last tab if closing last
+            const currentIndex = prev.findIndex(tab => tab.path === tabPath)
+            const newIndex = Math.min(currentIndex, remainingTabs.length - 1)
+            const newActiveTab = remainingTabs[newIndex] || remainingTabs[remainingTabs.length - 1]
+            
+            // For file tabs, ensure content is loaded
+            if (newActiveTab.type === 'file') {
+              // Try to get content from previous tabs or load it
+              const prevTabWithContent = prev.find(t => t.path === newActiveTab.path && 'content' in t)
+              if (prevTabWithContent && 'content' in prevTabWithContent && prevTabWithContent.content) {
+                setFileContent(prevTabWithContent.content)
+              } else {
+                loadFileContent(newActiveTab.path)
+              }
+            }
+            
+            return newActiveTab.path
+          } else {
+            // No tabs left
+            setFileContent('')
+            return undefined
+          }
+        }
+        // Not closing active tab, keep current active
+        return currentActive
+      })
+      
+      return remainingTabs
+    })
   }, [loadFileContent])
 
-  // Handle file save (via API route to avoid client-side Node.js imports)
+  // Handle file selection - PHASE 2: Block .devmate files, support tabs
+  const handleFileSelect = useCallback((filePath: string) => {
+    // PHASE 2: HARD RULE - .devmate files must NEVER open as editable source
+    if (isDevmateFile(filePath) || filePath.startsWith('.devmate/') || filePath === '.devmate') {
+      console.warn(`[AppGeneratorIDE] Blocked attempt to select .devmate file: ${filePath}`)
+      // If user tries to select settings.json, open Settings View instead
+      if (filePath.includes('settings')) {
+        openSettings()
+      }
+      return
+    }
+    
+    setEditorTabs(prev => {
+      // Check if file is already open in a tab
+      const existingTab = prev.find(tab => tab.path === filePath && tab.type === 'file')
+      if (existingTab) {
+        // Switch to existing tab
+        setActiveFile(filePath)
+        // Load content if not already loaded
+        const tabWithContent = prev.find(tab => tab.path === filePath)
+        if (tabWithContent && 'content' in tabWithContent && tabWithContent.content !== undefined) {
+          setFileContent(tabWithContent.content as string)
+        } else {
+          loadFileContent(filePath)
+        }
+        return prev
+      }
+      
+      // Add file as new tab
+      const newTabs = [
+        ...prev,
+        {
+          path: filePath,
+          type: 'file' as const,
+        }
+      ]
+      
+      setActiveFile(filePath)
+      loadFileContent(filePath)
+      return newTabs
+    })
+  }, [openSettings, loadFileContent])
+
+  // PHASE 2: Handle file save - PREVENT saving .devmate files
   const handleFileSave = useCallback(async (filePath: string, content: string) => {
     if (!projectId) {
       alert('Project ID is required to save files')
+      return
+    }
+
+    // PHASE 2: HARD RULE - .devmate files must NEVER be saved as editable source
+    if (isDevmateFile(filePath) || filePath.startsWith('.devmate/') || filePath === '.devmate') {
+      console.warn(`[AppGeneratorIDE] Blocked attempt to save .devmate file: ${filePath}. Settings must be changed via Settings View.`)
+      alert('Cannot save .devmate files directly. Please use the Settings View to change settings.')
       return
     }
 
@@ -405,6 +747,7 @@ export default function AppGeneratorIDE({ projectId: initialProjectId }: AppGene
       }
     }
 
+    // Save regular file only
     try {
       const response = await fetch('/api/runtime/file/save', {
         method: 'POST',
@@ -436,6 +779,20 @@ export default function AppGeneratorIDE({ projectId: initialProjectId }: AppGene
       alert(`Failed to save file: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
   }, [projectId, workspaceInitialized, loadFiles])
+
+  // PHASE 2: Keyboard shortcuts (Ctrl/Cmd+Shift+P for Command Palette)
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      // Command Palette: Ctrl+Shift+P (Windows/Linux) or Cmd+Shift+P (Mac)
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'P') {
+        e.preventDefault()
+        handleOpenCommandPalette()
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [handleOpenCommandPalette])
 
   // Load runtime state
   useEffect(() => {
@@ -489,14 +846,31 @@ export default function AppGeneratorIDE({ projectId: initialProjectId }: AppGene
                     sessionManager.createSession(currentDomain, projectId)
     
     // Load messages from session
-    setAiMessages(session.messages.map((msg) => ({
-      id: msg.id,
-      type: msg.type,
-      content: msg.content,
-      timestamp: msg.timestamp,
-      intent: msg.intent,
-      metadata: msg.metadata,
-    })))
+    // PHASE A: Convert SessionMessage types to AIMessage types for display
+    setAiMessages(session.messages.map((msg) => {
+      // Convert SessionMessage type to AIMessage type
+      let aimessageType: 'thinking' | 'acting' | 'done' | 'error' | 'suggestion'
+      if (msg.type === 'assistant') {
+        aimessageType = 'done' // Assistant messages show as "done" in chat
+      } else if (msg.type === 'error') {
+        aimessageType = 'error'
+      } else if (msg.type === 'observation') {
+        aimessageType = 'acting' // Observations show as "acting"
+      } else if (msg.type === 'system') {
+        aimessageType = 'thinking' // System messages show as "thinking"
+      } else {
+        aimessageType = 'done' // Default fallback (user messages are filtered out)
+      }
+
+      return {
+        id: msg.id,
+        type: aimessageType,
+        content: msg.content,
+        timestamp: msg.timestamp,
+        intent: msg.intent,
+        metadata: msg.metadata,
+      }
+    }))
   }, [projectId, currentDomain])
 
   // PHASE 1: Handle command with ExecutionIntent
@@ -552,27 +926,31 @@ export default function AppGeneratorIDE({ projectId: initialProjectId }: AppGene
       }
     }
 
-    // PHASE 6: Check confidence before risky actions
-    const { getAgentConfidenceEngine } = await import('@/core/workspace/AgentConfidenceEngine')
-    const confidenceEngine = getAgentConfidenceEngine(projectId)
-    const currentConfidence = confidenceEngine.getCurrentReport()
-    
-    // Check if this is a risky action
-    const isRiskyAction = intent.type === 'mutate' || intent.type === 'fix' || intent.type === 'generate'
-    const needsConfirmation = isRiskyAction && 
-      (currentConfidence.confidenceLevel === 'LOW' || currentConfidence.riskLevel === 'HIGH')
+    // PHASE 6: Check confidence before risky actions (skip for empty generate - handled by UI)
+    const isEmptyIntent = (intent as any).isEmptyIntent === true
+    if (!isEmptyIntent || intent.type !== 'generate') {
+      const { getAgentConfidenceEngine } = await import('@/core/workspace/AgentConfidenceEngine')
+      const confidenceEngine = getAgentConfidenceEngine(projectId)
+      const currentConfidence = confidenceEngine.getCurrentReport()
+      
+      // Check if this is a risky action
+      const isRiskyAction = intent.type === 'mutate' || intent.type === 'fix' || intent.type === 'generate'
+      const needsConfirmation = isRiskyAction && 
+        (currentConfidence.confidenceLevel === 'LOW' || currentConfidence.riskLevel === 'HIGH')
 
-    if (needsConfirmation && currentConfidence.riskLevel === 'HIGH' && currentConfidence.confidenceLevel === 'LOW') {
-      // Show confirmation dialog
-      setConfirmationDialog({
-        isOpen: true,
-        intent,
-        confidenceReport: currentConfidence,
-      })
-      return // Don't proceed until user confirms
+      if (needsConfirmation && currentConfidence.riskLevel === 'HIGH' && currentConfidence.confidenceLevel === 'LOW') {
+        // Show confirmation dialog
+        setConfirmationDialog({
+          isOpen: true,
+          intent,
+          confidenceReport: currentConfidence,
+        })
+        return // Don't proceed until user confirms
+      }
     }
 
     // Ensure workspace is initialized before execution
+    let workspaceFileCount = 0
     if (!workspaceInitialized) {
       try {
         setAgentState('thinking')
@@ -588,6 +966,8 @@ export default function AppGeneratorIDE({ projectId: initialProjectId }: AppGene
           throw new Error(error.error || 'Failed to initialize workspace')
         }
 
+        const initData = await initResponse.json()
+        workspaceFileCount = initData.fileCount || 0
         setWorkspaceInitialized(true)
         setAgentState('idle')
         setAgentMessage('')
@@ -607,6 +987,190 @@ export default function AppGeneratorIDE({ projectId: initialProjectId }: AppGene
         }, 3000)
         return // Stop execution if initialization fails
       }
+    } else {
+      // Get current file count if workspace is already initialized
+      try {
+        const initResponse = await fetch('/api/workspace/init', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ projectId, mode: 'app-generator' }),
+        })
+        if (initResponse.ok) {
+          const initData = await initResponse.json()
+          workspaceFileCount = initData.fileCount || 0
+        }
+      } catch (error) {
+        // Ignore error, will check on backend
+      }
+    }
+
+    // PHASE C: Check for empty generate intent - handle via UI-level bootstrap
+    const isEmptyGenerate = intent.type === 'generate' && (isEmptyIntent || workspaceFileCount === 0)
+    
+    if (isEmptyGenerate) {
+      // PHASE C: Handle empty generate via UI-level bootstrap (no agent)
+      setIsProcessing(true)
+      setAgentState('thinking')
+      setAgentMessage('Creating starter project...')
+
+      // Add user message
+      const userMessage = sessionManager.addMessage(currentDomain, projectId, {
+        type: 'user',
+        content: intent.description || 'Create a new project',
+        intent,
+      })
+      setAiMessages((prev) => [...prev, userMessage])
+
+      try {
+        const response = await fetch('/api/workspace/bootstrap', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            projectId,
+            platform: intent.platform || 'web',
+          }),
+        })
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({ error: 'Failed to create project' }))
+          throw new Error(errorData.error || 'Failed to create project')
+        }
+
+        const result = await response.json()
+        
+        // PHASE B: Bootstrap transaction committed on server - UI updates are best-effort only
+        // OS bootstrap is already complete, UI failures cannot affect it
+        try {
+          // PHASE D: Update workspace stage (UI state only, OS already committed)
+          setWorkspaceStage('bootstrapped')
+        } catch (e) {
+          console.warn('[AppGeneratorIDE] UI init failed; OS already committed:', e)
+        }
+
+        // PHASE B: UI boundary hardening - all UI operations wrapped in try-catch
+        // Bootstrap must never depend on UI success
+        try {
+          // Verify files were created
+          console.log('[AppGeneratorIDE] Bootstrap committed on server:', result)
+          console.log('[AppGeneratorIDE] Files created:', result.filesCreated)
+          
+          // Wait a bit for files to be written to disk, then force immediate file list refresh
+          // Clear any pending debounce and load files immediately
+          if (loadFilesDebounceRef.current) {
+            clearTimeout(loadFilesDebounceRef.current)
+          }
+          
+          // Retry file list loading a few times with delays to ensure files are written
+          let fileLoadAttempts = 0
+          const maxAttempts = 5
+          let regularFiles: any[] = []
+          
+          while (fileLoadAttempts < maxAttempts && regularFiles.length === 0) {
+            await new Promise(resolve => setTimeout(resolve, 300)) // Wait for file writes to complete
+            
+            try {
+              const fileResponse = await fetch(`/api/runtime/file/list?projectId=${projectId}`)
+              if (fileResponse.ok) {
+                const fileData = await fileResponse.json()
+                regularFiles = fileData.files || []
+                console.log(`[AppGeneratorIDE] File list attempt ${fileLoadAttempts + 1}: ${regularFiles.length} files found`)
+                
+                if (regularFiles.length > 0) {
+                  setFiles(regularFiles)
+                  break // Files found, exit retry loop
+                }
+              }
+            } catch (error) {
+              console.error(`[AppGeneratorIDE] Failed to load files (attempt ${fileLoadAttempts + 1}):`, error)
+            }
+            
+            fileLoadAttempts++
+          }
+          
+          // PHASE B: Open initial files (best-effort, wrapped in try-catch)
+          if (regularFiles.length > 0) {
+            const firstFile = regularFiles.find((f: any) => !f.isDirectory && f.type === 'file')
+            if (firstFile) {
+              console.log('[AppGeneratorIDE] Opening first file:', firstFile.path)
+              
+              try {
+                setEditorTabs([{
+                  path: firstFile.path,
+                  type: 'file',
+                  dirty: false,
+                  modifiedByAI: false,
+                }])
+                setActiveFile(firstFile.path)
+              } catch (e) {
+                console.warn('[AppGeneratorIDE] Failed to open file in tab (non-fatal):', e)
+              }
+              
+              // Load file content
+              try {
+                const contentResponse = await fetch(`/api/runtime/file/read?projectId=${projectId}&path=${encodeURIComponent(firstFile.path)}`)
+                if (contentResponse.ok) {
+                  const contentData = await contentResponse.json()
+                  const content = contentData.content || ''
+                  console.log(`[AppGeneratorIDE] Loaded file content (${content.length} chars):`, firstFile.path)
+                  setFileContent(content)
+                  
+                  // Update tab with content
+                  setEditorTabs(prev => prev.map(tab => 
+                    tab.path === firstFile.path && tab.type === 'file'
+                      ? { ...tab, content }
+                      : tab
+                  ))
+                } else {
+                  console.error('[AppGeneratorIDE] Failed to read file content:', contentResponse.status)
+                }
+              } catch (error) {
+                console.error('[AppGeneratorIDE] Failed to load first file content:', error)
+              }
+            }
+          } else {
+            console.warn('[AppGeneratorIDE] No files found after bootstrap, filesCreated:', result.filesCreated)
+            // Still try to load files normally
+            loadFiles()
+          }
+        } catch (error) {
+          // PHASE B: UI init failed but OS bootstrap already committed
+          console.warn('[AppGeneratorIDE] UI init failed; OS already committed:', error)
+          // Still try to load files normally
+          loadFiles()
+        }
+
+        // PHASE F: UX Truthfulness - Clear, explicit summary message with capabilities
+        const platformName = result.platform === 'web' ? 'web' : result.platform === 'node' ? 'Node.js' : 'web'
+        const assistantMessage = sessionManager.addMessage(currentDomain, projectId, {
+          type: 'assistant',
+          content: `✅ Starter ${platformName} project created with ${result.fileCount} file${result.fileCount !== 1 ? 's' : ''}.\n\nThis project currently uses a simple HTML/CSS/JS structure.\n\nI can:\n• Add features (e.g., "add calculator logic")\n• Improve UI/UX (e.g., "redesign the interface")\n• Migrate to a framework (e.g., "convert to React")\n\nWhat would you like to do?`,
+          metadata: { filesCreated: result.filesCreated, platform: result.platform },
+        })
+        setAiMessages((prev) => [...prev, assistantMessage])
+
+        setAgentState('done')
+        setAgentMessage('Project created')
+        setTimeout(() => {
+          setAgentState('idle')
+          setAgentMessage('')
+        }, 2000)
+      } catch (error) {
+        console.error('Failed to bootstrap project:', error)
+        const errorMessage = sessionManager.addMessage(currentDomain, projectId, {
+          type: 'error',
+          content: `Failed to create project: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        })
+        setAiMessages((prev) => [...prev, errorMessage])
+        setAgentState('error')
+        setAgentMessage('Failed to create project')
+        setTimeout(() => {
+          setAgentState('idle')
+          setAgentMessage('')
+        }, 3000)
+      } finally {
+        setIsProcessing(false)
+      }
+      return // Exit early - don't call agent
     }
 
     setIsProcessing(true)
@@ -679,10 +1243,37 @@ export default function AppGeneratorIDE({ projectId: initialProjectId }: AppGene
                       setAiMessages((prev) => [...prev, checkpointMessage])
                     }
                     break
+                  case 'ASSISTANT_MESSAGE':
+                    // PHASE A: Create visible assistant message for chat
+                    // PHASE F-3: If requiresConfirmation, mark message for user approval
+                    const assistantMsg = sessionManager.addMessage(currentDomain, projectId, {
+                      type: 'assistant',
+                      content: event.payload.content,
+                      metadata: {
+                        ...event.payload.metadata,
+                        requiresConfirmation: event.payload.metadata?.requiresConfirmation || false,
+                        planType: event.payload.metadata?.planType,
+                      },
+                    })
+                    setAiMessages((prev) => [...prev, assistantMsg])
+                    // PHASE D: Update workspace stage if generation completed
+                    if (event.payload.metadata?.filesCreated) {
+                      setWorkspaceStage('generated')
+                    }
+                    // PHASE F-3: If requires confirmation, pause execution (AgentExecutionRouter will wait)
+                    if (event.payload.metadata?.requiresConfirmation) {
+                      setAgentState('thinking')
+                      setAgentMessage('Waiting for your confirmation...')
+                    }
+                    break
                   case 'AGENT_DONE':
                     // PHASE 7: Update agent state
                     setAgentState('done')
                     setAgentMessage(event.payload.message || 'Completed')
+                    // PHASE D: Update workspace stage if files were created
+                    if (event.payload.result?.filesCreated) {
+                      setWorkspaceStage('generated')
+                    }
                     // Auto-reset to idle after 2 seconds
                     setTimeout(() => {
                       setAgentState('idle')
@@ -693,15 +1284,24 @@ export default function AppGeneratorIDE({ projectId: initialProjectId }: AppGene
                     // PHASE 7: Update agent state
                     setAgentState('error')
                     setAgentMessage(event.payload.error || 'Error occurred')
+                    // PHASE D: Context-aware error message
+                    const contextAwareError = getContextAwareErrorMessage(event.payload.error || 'Error occurred', workspaceStage, files.length)
                     const errorMsg = sessionManager.addMessage(currentDomain, projectId, {
                       type: 'error',
-                      content: event.payload.error,
+                      content: contextAwareError,
                     })
                     setAiMessages((prev) => [...prev, errorMsg])
+                    setWorkspaceStage('error')
                     // Auto-reset to idle after 3 seconds
                     setTimeout(() => {
                       setAgentState('idle')
                       setAgentMessage('')
+                      // Reset error stage if no persistent error
+                      if (files.length > 0) {
+                        setWorkspaceStage('generated')
+                      } else {
+                        setWorkspaceStage('empty')
+                      }
                     }, 3000)
                     break
                   case 'GENERATION_STARTED':
@@ -717,17 +1317,28 @@ export default function AppGeneratorIDE({ projectId: initialProjectId }: AppGene
                   case 'EXECUTION_ERROR':
                     setAgentState('error')
                     setAgentMessage(event.payload.error || 'Execution error')
+                    // PHASE D: Context-aware error message
+                    const execContextError = getContextAwareErrorMessage(event.payload.error || 'Execution error', workspaceStage, files.length)
                     const execErrorMessage = sessionManager.addMessage(currentDomain, projectId, {
                       type: 'error',
-                      content: event.payload.error,
+                      content: execContextError,
                     })
                     setAiMessages((prev) => [...prev, execErrorMessage])
+                    setWorkspaceStage('error')
                     break
                   case 'RUNTIME_STARTED':
                     setRuntimeState((prev: any) => ({
                       ...prev,
                       status: 'running',
                     }))
+                    // PHASE D: Update workspace stage
+                    setWorkspaceStage('running')
+                    // PHASE D: Clear summary message
+                    const runtimeMessage = sessionManager.addMessage(currentDomain, projectId, {
+                      type: 'assistant',
+                      content: `▶ App is running. Preview is available.`,
+                    })
+                    setAiMessages((prev) => [...prev, runtimeMessage])
                     break
                   case 'FILE_CHANGED':
                     // PHASE 1: Track AI-modified files
@@ -759,20 +1370,10 @@ export default function AppGeneratorIDE({ projectId: initialProjectId }: AppGene
     } catch (error) {
       console.error('Failed to execute agent:', error)
       
-      // PHASE -1: Provide helpful error messages
-      let errorContent = 'Failed to execute agent'
+      // PHASE D: Context-aware error messages (replace generic "Failed to execute agent")
+      let errorContent = 'An error occurred'
       if (error instanceof Error) {
-        errorContent = error.message
-        // Provide context-specific help
-        if (error.message.includes('empty') || error.message.includes('no files')) {
-          errorContent = `${error.message}\n\n💡 Tip: Try describing what you want to build, e.g., "build a simple calculator website"`
-        } else if (error.message.includes('invalid') || error.message.includes('Invalid')) {
-          errorContent = `${error.message}\n\n💡 Tip: Describe what you want to build in natural language, e.g., "create a todo app" or "build a snake game"`
-        } else if (error.message.includes('No files were generated') || error.message.includes('No valid files')) {
-          errorContent = `${error.message}\n\n💡 Tip: Try being more specific, e.g., "build a simple calculator website using HTML, CSS, and JavaScript"`
-        } else if (error.message.includes('Workspace not initialized')) {
-          errorContent = `${error.message}\n\n💡 Tip: The workspace is initializing. Please wait a moment and try again.`
-        }
+        errorContent = getContextAwareErrorMessage(error.message, workspaceStage, files.length, intent.type)
       }
       
       const errorMessage = sessionManager.addMessage(currentDomain, projectId, {
@@ -782,10 +1383,17 @@ export default function AppGeneratorIDE({ projectId: initialProjectId }: AppGene
       setAiMessages((prev) => [...prev, errorMessage])
       setAgentState('error')
       setAgentMessage(errorContent)
+      setWorkspaceStage('error')
       setTimeout(() => {
         setAgentState('idle')
         setAgentMessage('')
-      }, 5000)
+        // Reset error stage
+        if (files.length > 0) {
+          setWorkspaceStage('generated')
+        } else {
+          setWorkspaceStage('empty')
+        }
+      }, 3000)
     } finally {
       setIsProcessing(false)
     }
@@ -803,8 +1411,13 @@ export default function AppGeneratorIDE({ projectId: initialProjectId }: AppGene
   }, [])
 
   const handleOpenFolder = useCallback(() => {
-    // Folder input is handled by IDEMenuBar
-  }, [])
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/fe742378-fb51-48f7-9ab2-5f48302b4b88',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AppGeneratorIDE.tsx:1337',message:'handleOpenFolder called',data:{projectId:projectId||'null',hasProjectId:!!projectId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+    // #endregion
+    console.log('[AppGeneratorIDE] handleOpenFolder called', { projectId, hasProjectId: !!projectId })
+    // Trigger folder input click via custom event (IDEMenuBar will handle it)
+    window.dispatchEvent(new CustomEvent('open-workspace-folder', { detail: { projectId } }))
+  }, [projectId])
 
   const handleSave = useCallback(() => {
     if (activeFile) {
@@ -909,8 +1522,9 @@ export default function AppGeneratorIDE({ projectId: initialProjectId }: AppGene
     // Task running is handled by terminal
   }, [])
 
+  // PHASE 2: Command Palette handler
   const handleCommandPalette = useCallback(() => {
-    alert('Command Palette - Press Ctrl+Shift+P')
+    setShowCommandPalette(true)
   }, [])
 
   const handleWelcome = useCallback(() => {
@@ -1029,12 +1643,21 @@ export default function AppGeneratorIDE({ projectId: initialProjectId }: AppGene
         onRunTask={handleRunTask}
         onToggleSidebar={() => setShowSidebar(!showSidebar)}
         onToggleTerminal={() => {
-          setShowBottomPanel(!showBottomPanel)
-          if (!showBottomPanel) {
+          const newValue = !showBottomPanel
+          setShowBottomPanel(newValue)
+          if (newValue) {
             setBottomPanelTab('terminal')
           }
         }}
-        onToggleExplorer={() => setShowExplorer(!showExplorer)}
+        onToggleExplorer={() => {
+          const newValue = !showExplorer
+          setShowExplorer(newValue)
+          // Also toggle sidebar if explorer is being shown
+          if (newValue && !showSidebar) {
+            setShowSidebar(true)
+            setActiveView('explorer')
+          }
+        }}
         onToggleSearch={() => setShowSearch(!showSearch)}
         onToggleProblems={() => setShowProblems(!showProblems)}
         onToggleOutput={() => setShowOutput(!showOutput)}
@@ -1045,6 +1668,10 @@ export default function AppGeneratorIDE({ projectId: initialProjectId }: AppGene
         onWelcome={handleWelcome}
         onAbout={handleAbout}
         onRollbackProject={handleRollbackProject}
+        showExplorer={showExplorer && showSidebar}
+        showTerminal={showBottomPanel}
+        showChat={showChat}
+        onToggleChat={() => setShowChat(!showChat)}
       />
 
       {/* Main IDE Layout */}
@@ -1054,11 +1681,11 @@ export default function AppGeneratorIDE({ projectId: initialProjectId }: AppGene
           activeView={activeView}
           onViewChange={handleViewChange}
           gitStatus={gitStatus}
-          onOpenSettings={() => setIsSettingsOpen(true)}
+          onOpenSettings={openSettings}
         />
 
         {/* Left Sidebar: Files/Search/Source Control */}
-        {showSidebar && (
+        {showSidebar && showExplorer && (
           <IDEResizablePanel
             defaultWidth={sidebarWidth}
             minWidth={200}
@@ -1130,69 +1757,150 @@ export default function AppGeneratorIDE({ projectId: initialProjectId }: AppGene
               </div>
             )}
             {activeView === 'extensions' && (
-              <div className="h-full flex flex-col bg-gray-50 dark:bg-gray-900">
-                <div className="p-4 text-sm text-gray-500 dark:text-gray-400">
-                  Extensions panel coming soon
-                </div>
-              </div>
+              <IDEExtensionsPanel />
             )}
           </IDEResizablePanel>
         )}
 
-        {/* Center: Code Playground with Editor */}
-        <div className="flex-1 flex flex-col min-w-0">
-          <IDECodePlayground
-            projectId={projectId}
-            filePath={activeFile}
-            content={fileContent}
-            onSave={(content) => {
-              if (activeFile) {
-                handleFileSave(activeFile, content)
-              } else {
-                alert('No file selected. Please select a file or create a new one first.')
-              }
-            }}
-            onChange={setFileContent}
-            editorSettings={editorSettings}
-            onRun={(filePath, mode) => {
-              // Dispatch command to terminal
-              window.dispatchEvent(new CustomEvent('terminal-command', {
-                detail: { projectId, filePath, mode },
-              }))
-            }}
-          />
+        {/* Center: Code Playground with Editor OR Settings View */}
+        <div className={`flex-1 flex min-w-0 ${splitEditor ? 'flex-row' : 'flex-col'}`}>
+          {/* Primary Editor */}
+          <div className={`flex flex-col min-w-0 ${splitEditor ? 'flex-1' : 'flex-1'}`}>
+            {/* PHASE 2: Tab Bar (VS Code-style with close buttons) */}
+            {editorTabs.length > 0 && (
+              <IDETabBar
+                tabs={editorTabs}
+                activeTab={activeFile}
+                onTabSelect={handleTabSelect}
+                onTabClose={handleTabClose}
+              />
+            )}
+
+            {/* Content Area: Editor or Settings View based on active tab */}
+            {activeFile && editorTabs.find(tab => tab.path === activeFile && tab.type === 'settings') ? (
+              // Settings View (as a tab)
+              <div className="flex-1 min-h-0 overflow-hidden">
+                <SettingsView 
+                  projectId={projectId} 
+                  onClose={() => {
+                    // Close Settings tab
+                    handleTabClose(activeFile)
+                  }} 
+                />
+              </div>
+            ) : activeFile ? (
+            // File Editor (as a tab)
+            <IDECodePlayground
+              projectId={projectId}
+              filePath={activeFile}
+              content={fileContent}
+              onSave={(content) => {
+                if (activeFile) {
+                  handleFileSave(activeFile, content)
+                } else {
+                  alert('No file selected. Please select a file or create a new one first.')
+                }
+              }}
+              onChange={setFileContent}
+              editorSettings={editorSettings}
+              splitEditor={splitEditor}
+              onToggleSplitEditor={() => setSplitEditor(!splitEditor)}
+              onOpenTerminal={() => {
+                // Open terminal panel and set to terminal tab
+                setShowBottomPanel(true)
+                setBottomPanelTab('terminal')
+              }}
+              onRun={(filePath, mode) => {
+                // This is handled by IDECodePlayground's handleRun
+              }}
+            />
+            ) : (
+              // No tabs open - show empty state
+              <div className="flex-1 flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+                <div className="text-center text-gray-500 dark:text-gray-400">
+                  <p className="text-lg mb-2">No files open</p>
+                  <p className="text-sm">Select a file from the explorer to start editing</p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Split Editor (Secondary Editor) */}
+          {splitEditor && (
+            <div className="flex-1 flex flex-col min-w-0 border-l border-gray-200 dark:border-gray-800">
+              <div className="h-8 flex items-center px-2 bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+                <span className="text-xs text-gray-500 dark:text-gray-400">Split Editor</span>
+              </div>
+              {activeFile ? (
+                <IDECodePlayground
+                  projectId={projectId}
+                  filePath={activeFile}
+                  content={fileContent}
+                  onSave={(content) => {
+                    if (activeFile) {
+                      handleFileSave(activeFile, content)
+                    }
+                  }}
+                  onChange={(newContent) => {
+                    // Update the same file content for split view
+                    setFileContent(newContent)
+                  }}
+                  editorSettings={editorSettings}
+                  onOpenTerminal={() => {
+                    // Open terminal panel and set to terminal tab
+                    setShowBottomPanel(true)
+                    setBottomPanelTab('terminal')
+                  }}
+                  onRun={(filePath, mode) => {
+                    // This is handled by IDECodePlayground's handleRun
+                  }}
+                />
+              ) : (
+                <div className="flex-1 flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+                  <div className="text-center text-gray-500 dark:text-gray-400">
+                    <p className="text-sm mb-2">Split Editor</p>
+                    <p className="text-xs">Open a file to view in split mode</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Right Sidebar: Chat (Resizable) */}
-        <IDEResizablePanel
-          defaultWidth={chatWidth}
-          minWidth={250}
-          maxWidth={600}
-          onResize={setChatWidth}
-          resizeHandlePosition="left" // Resize handle on left for right sidebar
-        >
-          <div className="h-full flex flex-col border-l border-gray-200 dark:border-gray-800">
-            {/* AI Chat */}
-            <div className="flex-1 min-h-0">
-              <IDEChat
-                messages={aiMessages}
-                confidenceReport={confidenceReport}
-                onCommand={handleCommand}
-                onPlanApproved={handlePlanApproved}
-                onStepApproved={handleStepApproved}
-                className="h-full"
-                disabled={!workspaceInitialized}
-                isProcessing={isProcessing}
-                agentState={agentState}
-                agentMessage={agentMessage}
-              />
-            </div>
+        {showChat && (
+          <IDEResizablePanel
+            defaultWidth={chatWidth}
+            minWidth={250}
+            maxWidth={600}
+            onResize={setChatWidth}
+            resizeHandlePosition="left" // Resize handle on left for right sidebar
+          >
+            <div className="h-full flex flex-col border-l border-gray-200 dark:border-gray-800">
+              {/* AI Chat */}
+              <div className="flex-1 min-h-0">
+                <IDEChat
+                  messages={aiMessages}
+                  confidenceReport={confidenceReport}
+                  onCommand={handleCommand}
+                  onPlanApproved={handlePlanApproved}
+                  onStepApproved={handleStepApproved}
+                  className="h-full"
+                  disabled={!workspaceInitialized}
+                  isProcessing={isProcessing}
+                  agentState={agentState}
+                  agentMessage={agentMessage}
+                  workspaceStage={workspaceStage}
+                  fileCount={files.length}
+                />
+              </div>
 
-          </div>
-        </IDEResizablePanel>
+            </div>
+          </IDEResizablePanel>
+        )}
       </div>
 
-      {/* PHASE 5: Bottom Panel (Terminal / Preview / Console) */}
+      {/* PHASE 5: Bottom Panel (Terminal / Preview / Console / Problems) */}
       <IDEBottomPanel
         projectId={projectId}
         previewUrl={runtimeState?.previewUrl}
@@ -1206,6 +1914,25 @@ export default function AppGeneratorIDE({ projectId: initialProjectId }: AppGene
         }}
         isVisible={showBottomPanel}
         onClose={() => setShowBottomPanel(false)}
+        defaultTab={bottomPanelTab}
+        problems={diagnostics}
+        onProblemClick={(problem) => {
+          // Open file at problem location
+          if (problem.file) {
+            handleFileSelect(problem.file)
+            // TODO: Navigate to line and column in editor
+          }
+        }}
+      />
+
+      {/* PHASE 2: Command Palette */}
+      <CommandPalette
+        projectId={projectId}
+        isOpen={showCommandPalette}
+        onClose={() => setShowCommandPalette(false)}
+        onCommandExecuted={(commandId) => {
+          console.log(`[AppGeneratorIDE] Command executed: ${commandId}`)
+        }}
       />
 
       {/* Settings Panel */}

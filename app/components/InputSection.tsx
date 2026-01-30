@@ -56,18 +56,18 @@ export default function InputSection({ onNewChat }: InputSectionProps) {
     switch (model) {
       case 'auto':
         return 'Auto (Smart)'
-      case 'chatgpt-5':
-        return 'GPT-5'
-      case 'gemini-2.5-pro':
-        return 'Gemini 2.5 Pro'
+      case 'gpt-5.1':
+        return 'GPT-5.1'
+      case 'gemini-3-pro':
+        return 'Gemini 3 Pro'
       case 'gemini-2.5-flash':
         return 'Gemini 2.5 Flash'
+      case 'kimi-k2':
+        return 'Kimi K2'
+      case 'deepseek-3':
+        return 'DeepSeek 3'
       case 'grok-4':
         return 'Grok 4'
-      case 'grok-2-1212':
-        return 'Grok 2'
-      case 'grok-vision-beta':
-        return 'Grok Vision'
       default:
         return 'Auto (Smart)'
     }
@@ -77,18 +77,18 @@ export default function InputSection({ onNewChat }: InputSectionProps) {
     switch (model) {
       case 'auto':
         return <FiZap className="w-4 h-4" />
-      case 'chatgpt-5':
-        return <SiOpenai className="w-4 h-4" />
-      case 'gemini-2.5-pro':
-        return <SiGoogle className="w-4 h-4" />
+      case 'gpt-5.1':
+        return <SiOpenai className="w-4 h-4 text-green-600" />
+      case 'gemini-3-pro':
+        return <SiGoogle className="w-4 h-4 text-purple-600" />
       case 'gemini-2.5-flash':
         return <FiCpu className="w-4 h-4 text-blue-500" />
+      case 'kimi-k2':
+        return <FiCpu className="w-4 h-4 text-orange-500" />
+      case 'deepseek-3':
+        return <FiCpu className="w-4 h-4 text-cyan-500" />
       case 'grok-4':
         return <FiCpu className="w-4 h-4 text-rose-500" />
-      case 'grok-2-1212':
-        return <FiCpu className="w-4 h-4 text-purple-500" />
-      case 'grok-vision-beta':
-        return <FiCpu className="w-4 h-4 text-indigo-500" />
       default:
         return <FiZap className="w-4 h-4" />
     }
@@ -104,6 +104,33 @@ export default function InputSection({ onNewChat }: InputSectionProps) {
     const files = e.target.files
     if (!files) return
 
+    // For General domain, handle images directly for RAG
+    if (currentDomain === 'general') {
+      const imageFiles = Array.from(files).filter(f => f.type.startsWith('image/'))
+      if (imageFiles.length > 0) {
+        for (const file of imageFiles) {
+          const reader = new FileReader()
+          reader.onload = (event) => {
+            const base64 = event.target?.result as string
+            setUploadedFiles(prev => [...prev, {
+              file,
+              preview: base64,
+              type: 'image',
+              name: file.name,
+              content: base64 // Full base64 data URL for RAG
+            }])
+          }
+          reader.readAsDataURL(file)
+        }
+        toast.success(`${imageFiles.length} image(s) ready for query`, { id: 'file-upload' })
+        if (fileInputRef.current) {
+          fileInputRef.current.value = ''
+        }
+        return
+      }
+    }
+
+    // For other domains or non-image files, use existing upload API
     const formData = new FormData()
     Array.from(files).forEach(file => {
       formData.append('files', file)
@@ -207,7 +234,8 @@ export default function InputSection({ onNewChat }: InputSectionProps) {
       let buffer = ''
       let currentModelUsed = ''
       let lastChunkTime = Date.now()
-      const TIMEOUT_MS = 60000
+      // Longer timeout for code generation - code generation can take longer, especially with optimized prompts
+      const TIMEOUT_MS = 120000 // 2 minutes for code generation (increased from 60s to handle longer generation times)
 
       if (reader) {
         const readWithTimeout = async () => {
@@ -215,7 +243,7 @@ export default function InputSection({ onNewChat }: InputSectionProps) {
             let timeoutId: NodeJS.Timeout | null = null
             
             const timeoutPromise = new Promise((_, reject) => {
-              timeoutId = setTimeout(() => reject(new Error('Stream timeout - no data received for 60 seconds')), TIMEOUT_MS)
+              timeoutId = setTimeout(() => reject(new Error(`Stream timeout - no data received for ${TIMEOUT_MS / 1000} seconds`)), TIMEOUT_MS)
             })
             
             const readPromise = reader.read()
@@ -370,10 +398,18 @@ export default function InputSection({ onNewChat }: InputSectionProps) {
         <button
           type="button"
           onClick={() => fileInputRef.current?.click()}
-          className="m-2 p-2 rounded-lg text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-          title="Attach image"
+          className={`m-2 p-2 rounded-lg transition-colors ${
+            currentDomain === 'general'
+              ? 'text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20'
+              : 'text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+          }`}
+          title={currentDomain === 'general' ? 'Upload image for RAG query' : 'Attach image'}
         >
-          <FiPaperclip className="w-5 h-5" />
+          {currentDomain === 'general' ? (
+            <FiImage className="w-5 h-5" />
+          ) : (
+            <FiPaperclip className="w-5 h-5" />
+          )}
         </button>
 
         <div className="relative flex-shrink-0" ref={dropdownRef}>
@@ -397,7 +433,7 @@ export default function InputSection({ onNewChat }: InputSectionProps) {
                 className="absolute bottom-full mb-2 left-0 w-56 bg-white dark:bg-gray-800 rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden z-50"
               >
                 <div className="p-2">
-                  {(['auto', 'chatgpt-5', 'gemini-2.5-flash', 'gemini-2.5-pro', 'grok-4', 'grok-2-1212', 'grok-vision-beta'] as AIModelSelection[]).map((model) => (
+                  {(['auto', 'gpt-5.1', 'gemini-3-pro', 'gemini-2.5-flash', 'kimi-k2', 'deepseek-3', 'grok-4'] as AIModelSelection[]).map((model) => (
                     <button
                       key={model}
                       type="button"
@@ -416,23 +452,23 @@ export default function InputSection({ onNewChat }: InputSectionProps) {
                         {model === 'auto' && (
                           <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Best model for the task</div>
                         )}
-                        {model === 'chatgpt-5' && (
+                        {model === 'gpt-5.1' && (
                           <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Advanced reasoning</div>
+                        )}
+                        {model === 'gemini-3-pro' && (
+                          <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Latest Google AI Pro</div>
                         )}
                         {model === 'gemini-2.5-flash' && (
                           <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Fast & efficient</div>
                         )}
-                        {model === 'gemini-2.5-pro' && (
-                          <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Google AI Pro</div>
+                        {model === 'kimi-k2' && (
+                          <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Moonshot AI - Kimi K2</div>
+                        )}
+                        {model === 'deepseek-3' && (
+                          <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">DeepSeek 3 - Advanced</div>
                         )}
                         {model === 'grok-4' && (
                           <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Most intelligent - xAI</div>
-                        )}
-                        {model === 'grok-2-1212' && (
-                          <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">xAI Grok - 131k context</div>
-                        )}
-                        {model === 'grok-vision-beta' && (
-                          <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">xAI Grok with vision</div>
                         )}
                       </div>
                       {selectedModel === model && (
@@ -451,7 +487,7 @@ export default function InputSection({ onNewChat }: InputSectionProps) {
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Message Devmate..."
+          placeholder={currentDomain === 'academic' ? '' : 'Message Devmate...'}
           className="flex-1 bg-transparent px-2 py-3 text-gray-900 dark:text-white placeholder-gray-400 resize-none focus:outline-none max-h-48 min-h-[52px]"
           rows={1}
           disabled={isLoading}

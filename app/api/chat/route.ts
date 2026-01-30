@@ -51,7 +51,7 @@ function detectIntent(prompt: string) {
 
 export async function POST(req: NextRequest) {
   try {
-    const { prompt, action, code, instructions, error, domain, chatHistory, files, selectedAgent } = await req.json()
+    const { prompt, action, code, instructions, error, domain, chatHistory, files, selectedAgent, projectId } = await req.json()
 
     if (!process.env.OPENAI_API_KEY && !process.env.GEMINI_API_KEY) {
       return NextResponse.json(
@@ -183,8 +183,86 @@ Fixed code with brief explanation of changes.`
     }
 
     // Add file context if files are provided
+    let uploadedImage: string | undefined
     if (files && files.length > 0) {
+      // Check for image files
+      const imageFile = files.find((f: any) => f.type?.startsWith('image/'))
+      if (imageFile && imageFile.content) {
+        // Extract base64 image data (assuming it's in data:image/... format)
+        uploadedImage = imageFile.content.includes('data:') 
+          ? imageFile.content.split(',')[1] 
+          : imageFile.content
+      }
+      
       userMessage = `${userMessage}\n\n**ATTACHED FILES:**\n${files.map((f: any) => `- ${f.name}: ${f.content.substring(0, 1000)}${f.content.length > 1000 ? '...' : ''}`).join('\n')}`
+    }
+
+    // RAG Integration for General Domain only
+    let ragContext: string = ''
+    let useVisionModel = false
+    if (domain === 'general' || domainContext === 'General') {
+      try {
+        // Get current user for access control
+        const { getCurrentUser } = await import('@/lib/auth')
+        const currentUser = await getCurrentUser()
+        
+        if (currentUser) {
+          const { connectDB } = await import('@/lib/mongodb')
+          await connectDB()
+          const User = (await import('@/models/User')).default
+          const user = await User.findById(currentUser.userId)
+          
+          if (user) {
+            // Get user groups using AccessControl
+            const { AccessControl } = await import('@/lib/rag/AccessControl')
+            const accessControl = new AccessControl()
+            const userGroupIds = await accessControl.getUserGroups(String(user._id))
+            
+            // Import RAG components
+            const { QueryRouter } = await import('@/lib/rag/QueryRouter')
+            const { Retriever } = await import('@/lib/rag/Retriever')
+            const { ContextBuilder } = await import('@/lib/rag/ContextBuilder')
+            
+            const queryRouter = new QueryRouter()
+            const retriever = new Retriever()
+            const contextBuilder = new ContextBuilder()
+            
+            // Classify query
+            const classification = await queryRouter.classify(prompt, !!uploadedImage)
+            
+            // Retrieve context
+            const retrievalResults = await retriever.retrieve(
+              classification.queryType,
+              prompt,
+              uploadedImage,
+              String(user._id),
+              userGroupIds,
+              5 // Limit to 5 results
+            )
+            
+            if (retrievalResults.length > 0) {
+              // Build context
+              const context = contextBuilder.build(retrievalResults)
+              
+              // Format context for prompt
+              if (uploadedImage) {
+                // Use vision-capable model
+                useVisionModel = true
+                const visionPrompt = contextBuilder.formatAsVisionPrompt(context, prompt, uploadedImage)
+                ragContext = visionPrompt.textPrompt
+              } else {
+                ragContext = contextBuilder.formatAsPrompt(context, prompt)
+              }
+              
+              // Prepend RAG context to user message
+              userMessage = `${ragContext}\n\n${userMessage}`
+            }
+          }
+        }
+      } catch (ragError: any) {
+        console.error('[Chat API] RAG integration error:', ragError)
+        // Continue without RAG context if there's an error
+      }
     }
 
     // Add the current user message
@@ -197,9 +275,14 @@ Fixed code with brief explanation of changes.`
     
     // Use AI orchestrator if enabled, otherwise use direct OpenAI
     if (USE_ORCHESTRATOR && process.env.GEMINI_API_KEY) {
-      const selectedModel = chooseModel(userMessage, action, domain, selectedAgent)
+      // Use vision model if RAG detected an image query in General domain
+      const modelOverride = useVisionModel ? 'google:gemini-2.0-flash-exp' : undefined
+      const selectedModel = modelOverride || chooseModel(userMessage, action, domain, selectedAgent)
       
       console.log(`[AI Orchestrator] User preference: ${selectedAgent || 'auto'} → Using model: ${selectedModel}`)
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/fe742378-fb51-48f7-9ab2-5f48302b4b88',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/api/chat/route.ts:200',message:'Model selection',data:{userPreference:selectedAgent,selectedModel,action,domain},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H1'})}).catch(()=>{});
+      // #endregion
       
       const readableStream = new ReadableStream({
         async start(controller) {
@@ -215,19 +298,115 @@ Fixed code with brief explanation of changes.`
             }).join('\n\n')
             
             try {
-              for await (const text of streamAIModelWithFailover({
-                prompt: fullPrompt,
-                systemInstruction: systemMessage,
-                temperature,
-                maxTokens: 4096,
-                action,
-                domain,
-              }, selectedAgent)) {
-                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text })}\n\n`))
+              // PHASE F′-3: Use role-aware AI if projectId is available
+              let streamFunction
+              if (projectId) {
+                try {
+                  const { WorkspaceRegistry } = await import('@/lib/workspace/WorkspaceRegistry')
+                  const rootPath = await WorkspaceRegistry.getRootPath(projectId)
+                  if (rootPath) {
+                    const { streamAIModelWithRole } = await import('@/lib/os/ai/roleAwareAI')
+                    streamFunction = streamAIModelWithRole(selectedModel, {
+                      prompt: fullPrompt,
+                      systemInstruction: systemMessage,
+                      temperature,
+                      maxTokens: 4096,
+                      action,
+                      domain,
+                      projectId,
+                      rootPath,
+                    })
+                  } else {
+                    // No rootPath - use regular stream
+                    streamFunction = streamAIModelWithFailover({
+                      prompt: fullPrompt,
+                      systemInstruction: systemMessage,
+                      temperature,
+                      maxTokens: 4096,
+                      action,
+                      domain,
+                    }, selectedAgent)
+                  }
+                } catch (error) {
+                  // PEE not available - use regular stream
+                  console.warn('[chat/route] Failed to get role-aware AI, using regular stream:', error)
+                  streamFunction = streamAIModelWithFailover({
+                    prompt: fullPrompt,
+                    systemInstruction: systemMessage,
+                    temperature,
+                    maxTokens: 4096,
+                    action,
+                    domain,
+                  }, selectedAgent)
+                }
+              } else {
+                // No projectId - use regular stream
+                streamFunction = streamAIModelWithFailover({
+                  prompt: fullPrompt,
+                  systemInstruction: systemMessage,
+                  temperature,
+                  maxTokens: 4096,
+                  action,
+                  domain,
+                }, selectedAgent)
               }
               
-              controller.enqueue(encoder.encode('data: [DONE]\n\n'))
-              controller.close()
+              try {
+                let hasYielded = false
+                let iterator = streamFunction[Symbol.asyncIterator]()
+                
+                try {
+                  while (true) {
+                    const result = await iterator.next()
+                    if (result.done) break
+                    hasYielded = true
+                    controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: result.value })}\n\n`))
+                  }
+                } catch (iterationError: any) {
+                  // Error during iteration
+                  console.error('[chat/route] Stream iteration error:', iterationError.message, iterationError.stack?.substring(0, 200))
+                  // #region agent log
+                  fetch('http://127.0.0.1:7242/ingest/fe742378-fb51-48f7-9ab2-5f48302b4b88',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/api/chat/route.ts:277',message:'Stream iteration error caught',data:{error:iterationError.message,errorType:iterationError.constructor.name,hasStack:!!iterationError.stack},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H1'})}).catch(()=>{});
+                  // #endregion
+                  controller.enqueue(
+                    encoder.encode(`data: ${JSON.stringify({ 
+                      error: iterationError.message || 'Stream processing error. Please try again.',
+                      type: 'error'
+                    })}\n\n`)
+                  )
+                  controller.enqueue(encoder.encode('data: [DONE]\n\n'))
+                  controller.close()
+                  return // Exit early, error already sent
+                }
+                
+                if (!hasYielded) {
+                  // Generator completed without yielding - this shouldn't happen, but handle it
+                  console.warn('[chat/route] Stream completed without yielding any data')
+                  controller.enqueue(
+                    encoder.encode(`data: ${JSON.stringify({ 
+                      error: 'No response received from AI models. Please check your API keys and try again.',
+                      type: 'error'
+                    })}\n\n`)
+                  )
+                }
+                
+                controller.enqueue(encoder.encode('data: [DONE]\n\n'))
+                controller.close()
+              } catch (innerError: any) {
+                // Error from setting up the iterator or other issues
+                console.error('[chat/route] Stream setup error:', innerError.message, innerError.stack?.substring(0, 200))
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/fe742378-fb51-48f7-9ab2-5f48302b4b88',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/api/chat/route.ts:305',message:'Stream setup error caught',data:{error:innerError.message,errorType:innerError.constructor.name,hasStack:!!innerError.stack},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H1'})}).catch(()=>{});
+                // #endregion
+                controller.enqueue(
+                  encoder.encode(`data: ${JSON.stringify({ 
+                    error: innerError.message || 'Stream processing error. Please try again.',
+                    type: 'error'
+                  })}\n\n`)
+                )
+                controller.enqueue(encoder.encode('data: [DONE]\n\n'))
+                controller.close()
+              }
             } catch (streamError: any) {
               console.error('Streaming error:', streamError)
               // Send error message to client before closing
@@ -264,8 +443,15 @@ Fixed code with brief explanation of changes.`
     }
     
     // Legacy OpenAI-only streaming
+    if (!openai) {
+      return NextResponse.json(
+        { error: 'OpenAI API key not configured' },
+        { status: 503 }
+      )
+    }
+    
     const stream = await openai.chat.completions.create({
-      model: 'gpt-4o',
+      model: 'gpt-4o', // GPT-4o used as API fallback for GPT-5.1 (UI removed, but API still uses it until GPT-5.1 is available)
       messages: messages,
       temperature: temperature,
       stream: true,

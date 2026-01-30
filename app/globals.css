@@ -2,6 +2,45 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Custom scrollbar styles */
+@layer utilities {
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(75 85 99) rgb(31 41 55);
+  }
+  
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: rgb(31 41 55);
+    border-radius: 4px;
+  }
+  
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: rgb(75 85 99);
+    border-radius: 4px;
+  }
+  
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background: rgb(107 114 128);
+  }
+  
+  .scrollbar-thumb-gray-600::-webkit-scrollbar-thumb {
+    background: rgb(75 85 99);
+  }
+  
+  .scrollbar-track-gray-800::-webkit-scrollbar-track {
+    background: rgb(31 41 55);
+  }
+  
+  .hover\:scrollbar-thumb-gray-500:hover::-webkit-scrollbar-thumb {
+    background: rgb(107 114 128);
+  }
+}
+
 /* Import fonts */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap');
@@ -57,15 +96,33 @@
   }
 }
 
+/* Fixed background for body */
+html {
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  height: 100%;
+  overflow: hidden;
+  position: relative;
+}
+
 /* Light theme body */
 body:not(.dark) {
   background: linear-gradient(135deg, #faf5ff 0%, #f0f9ff 25%, #f0fdfa 50%, #fef3c7 100%);
+  background-attachment: fixed;
+  background-size: cover;
+  background-position: center;
   color: #0f172a;
 }
 
 /* Dark theme body */
 body.dark {
   background: linear-gradient(to bottom right, #312e81, #1e293b, #111827);
+  background-attachment: fixed;
+  background-size: cover;
+  background-position: center;
   color: #ffffff;
 }
 
@@ -131,6 +188,29 @@ body.dark {
     -webkit-background-clip: text;
     color: transparent;
     background-image: linear-gradient(to right, #6366f1, #9333ea);
+  }
+
+  /* Overflow utilities */
+  .overflow-wrap-anywhere {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    hyphens: auto;
+  }
+
+  /* Code block container */
+  .code-container {
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    contain: layout style;
+  }
+
+  /* Message content container */
+  .message-content {
+    width: 100%;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    word-break: break-word;
   }
 
   /* Reduced motion support */

@@ -26,10 +26,12 @@ CRITICAL REQUIREMENTS - MUST FOLLOW:
 2. Include ALL necessary files: package.json, configs, routes, components, styles, etc.
 3. Use modern best practices and latest frameworks
 4. Include proper error handling and validation
-5. Generate clean, maintainable code with helpful comments
+5. Generate OPTIMIZED, MINIMAL code - comments ONLY for complex logic, keep code concise and production-ready
 6. Include setup instructions in README.md
 7. EVERY file must be FULLY IMPLEMENTED - no partial code
 8. Generate MINIMUM 10-15 files for a complete application
+9. OPTIMIZE for performance - use efficient algorithms, avoid unnecessary code, minimize bundle size
+10. Comments should be MINIMAL - only add comments when logic is truly complex or non-obvious
 
 MANDATORY FILES FOR FRONTEND:
 - package.json (with all dependencies and scripts)
@@ -87,12 +89,25 @@ function detectFramework(prompt: string): string {
   return 'Next.js'
 }
 
-export async function generateAppDirect(prompt: string): Promise<GeneratedProject> {
+export async function generateAppDirect(prompt: string, imageContext?: { base64: string; filename: string; mimeType: string }): Promise<GeneratedProject> {
   const detectedFramework = detectFramework(prompt)
+  
+  // Enhance prompt with image context if available
+  let imagePrompt = ''
+  if (imageContext) {
+    imagePrompt = `\n\nIMPORTANT: The user has attached an image (${imageContext.filename}). Analyze the image carefully and generate code that matches what you see in the image. The image may contain:
+- UI/UX designs or mockups
+- Screenshots of existing applications
+- Diagrams or flowcharts
+- Code snippets or documentation
+- Any visual reference that should guide the code generation
+
+Use the image content to inform your code generation decisions.`
+  }
   
   const enhancedPrompt = `Generate a complete, production-ready application based on this request:
 
-USER REQUEST: ${prompt}
+USER REQUEST: ${prompt}${imagePrompt}
 
 DETECTED FRAMEWORK: ${detectedFramework}
 
@@ -104,6 +119,8 @@ Generate a full project structure with:
 - Modern, clean UI with responsive design
 - Proper error handling and validation
 - No placeholder code - everything must be complete and working
+- OPTIMIZED code - minimal comments, efficient algorithms, production-ready performance
+- Comments ONLY for complex logic - keep code clean and self-documenting
 
 For frontend applications, include:
 - package.json with all dependencies
@@ -127,12 +144,27 @@ For full-stack applications, include both frontend and backend folders with comp
 Remember to output ONLY valid JSON in the specified format.`
 
   try {
-    const responseObj = await callAIModelWithFailover({
+    // Prepare request with image context if available
+    const requestOptions: any = {
       prompt: enhancedPrompt,
       systemInstruction: SYSTEM_INSTRUCTION,
-      temperature: 0.2,
-      maxTokens: 16384, // Increased for complete apps
-    }, 'auto') // Let orchestrator decide based on available keys
+      temperature: 0.2, // Balanced temperature for optimized but complete code
+      maxTokens: 16384, // Sufficient for complete apps without being excessive
+      skipRoleInjection: true, // PHASE F′-3: Generation mode bypasses role injection (full control needed)
+    }
+    
+    // Add image context if available (for vision models)
+    if (imageContext) {
+      requestOptions.imageContext = {
+        base64: imageContext.base64,
+        filename: imageContext.filename,
+        mimeType: imageContext.mimeType,
+      }
+    }
+    
+    // PHASE F′-3: Use direct call for generation (bypasses role injection)
+    // Generation needs full control and happens in "generation" mode which bypasses PEE checks
+    const responseObj = await callAIModelWithFailover(requestOptions, 'auto') // Let orchestrator decide based on available keys
 
     const response = responseObj.text
 

@@ -6,7 +6,7 @@ import { FiLoader, FiCheck, FiAlertCircle, FiCode, FiFile, FiTool, FiSettings, F
 
 export interface AIMessage {
   id: string
-  type: 'thinking' | 'acting' | 'done' | 'error' | 'suggestion'
+  type: 'thinking' | 'acting' | 'done' | 'error' | 'suggestion' | 'assistant'
   content: string
   toolCalls?: ToolCall[]
   fileReferences?: string[]
@@ -14,6 +14,11 @@ export interface AIMessage {
   confidence?: number // 0-100
   progress?: number // 0-100
   category?: string // For suggestions: 'build-fix', etc.
+  metadata?: {
+    requiresConfirmation?: boolean
+    planType?: string
+    [key: string]: any
+  }
   errorDetails?: {
     type: string
     explanation: string
@@ -45,6 +50,8 @@ interface AIMessagePanelProps {
   onStepApproved?: (planId: string, stepId: string) => void
   onStepRollback?: (planId: string, stepId: string) => void
   onPlanRollback?: (planId: string) => void
+  onPlanConfirmed?: (messageId: string) => void // PHASE F-3: Handle plan confirmation
+  onPlanCancelled?: (messageId: string) => void // PHASE F-3: Handle plan cancellation
   confidenceReport?: {
     confidenceScore: number
     confidenceLevel: 'LOW' | 'MEDIUM' | 'HIGH'
@@ -53,7 +60,7 @@ interface AIMessagePanelProps {
   } | null
 }
 
-export default function AIMessagePanel({ messages, isStreaming, onFileClick, onFollowUpAction, onFixAction, onPlanApproved, onStepApproved, onStepRollback, onPlanRollback, confidenceReport }: AIMessagePanelProps) {
+export default function AIMessagePanel({ messages, isStreaming, onFileClick, onFollowUpAction, onFixAction, onPlanApproved, onStepApproved, onStepRollback, onPlanRollback, onPlanConfirmed, onPlanCancelled, confidenceReport }: AIMessagePanelProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -172,6 +179,25 @@ export default function AIMessagePanel({ messages, isStreaming, onFileClick, onF
                 {message.content && (
                   <div className="text-sm text-gray-700 dark:text-gray-300 mb-2 whitespace-pre-wrap">
                     {message.content}
+                  </div>
+                )}
+
+                {/* PHASE F-3: Plan confirmation buttons */}
+                {message.metadata?.requiresConfirmation && (message.type === 'assistant' || message.type === 'thinking') && (
+                  <div className="mt-3 flex items-center gap-2">
+                    <button
+                      onClick={() => onPlanConfirmed?.(message.id)}
+                      className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-blue-600 dark:bg-blue-500 text-white rounded hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors"
+                    >
+                      <FiCheck className="w-4 h-4" />
+                      Proceed
+                    </button>
+                    <button
+                      onClick={() => onPlanCancelled?.(message.id)}
+                      className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+                    >
+                      Cancel
+                    </button>
                   </div>
                 )}
 

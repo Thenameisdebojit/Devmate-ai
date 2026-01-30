@@ -1,6 +1,8 @@
 /**
  * Environment Variable Validation
  * This module ensures all required environment variables are set before the app starts
+ * 
+ * PHASE C: Integrated with provider-specific validation
  */
 
 const REQUIRED_ENV_VARS = [
@@ -9,7 +11,7 @@ const REQUIRED_ENV_VARS = [
 ] as const
 
 const OPTIONAL_ENV_VARS = {
-  AI_PROVIDERS: ['OPENAI_API_KEY', 'GEMINI_API_KEY'],
+  AI_PROVIDERS: ['OPENAI_API_KEY', 'GEMINI_API_KEY', 'XAI_API_KEY', 'DEEPSEEK_API_KEY', 'MOONSHOT_API_KEY'],
   RESEARCH: ['TAVILY_API_KEY'],
   AUTH: ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET'],
 } as const
@@ -23,12 +25,24 @@ export function validateEnvironmentVariables(): void {
     }
   }
 
-  const hasAtLeastOneAIProvider = OPTIONAL_ENV_VARS.AI_PROVIDERS.some(
-    key => process.env[key]
-  )
-
-  if (!hasAtLeastOneAIProvider) {
-    missing.push('At least one AI provider (OPENAI_API_KEY or GEMINI_API_KEY)')
+  // PHASE C: Use provider-specific validation (better format checking)
+  try {
+    const { validateAllProviders } = require('@/lib/ai/envValidation')
+    const providerResults = validateAllProviders()
+    const hasAtLeastOneAIProvider = Object.values(providerResults).some(r => r.valid)
+    
+    if (!hasAtLeastOneAIProvider) {
+      missing.push('At least one AI provider API key is required')
+    }
+  } catch (error) {
+    // Fallback to basic check if provider validation not available
+    const hasAtLeastOneAIProvider = OPTIONAL_ENV_VARS.AI_PROVIDERS.some(
+      key => process.env[key]
+    )
+    
+    if (!hasAtLeastOneAIProvider) {
+      missing.push('At least one AI provider (OPENAI_API_KEY or GEMINI_API_KEY)')
+    }
   }
 
   if (missing.length > 0) {

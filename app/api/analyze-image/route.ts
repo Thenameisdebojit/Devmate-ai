@@ -1,13 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import OpenAI from 'openai'
+import { GoogleGenerativeAI } from '@google/generative-ai'
 
-if (!process.env.OPENAI_API_KEY) {
-  throw new Error('OPENAI_API_KEY environment variable is required')
+if (!process.env.OPENAI_API_KEY && !process.env.GEMINI_API_KEY) {
+  throw new Error('At least one of OPENAI_API_KEY or GEMINI_API_KEY environment variable is required')
 }
 
-const openai = new OpenAI({
+const openai = process.env.OPENAI_API_KEY ? new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
-})
+}) : null
+
+const gemini = process.env.GEMINI_API_KEY ? new GoogleGenerativeAI(process.env.GEMINI_API_KEY) : null
 
 export async function POST(req: NextRequest) {
   try {
@@ -30,9 +33,9 @@ export async function POST(req: NextRequest) {
     let analysisText = ''
 
     // Try OpenAI first if available
-    if (openai) {
+    if (openai && process.env.OPENAI_API_KEY) {
       const response = await openai.chat.completions.create({
-        model: 'gpt-4o',
+        model: 'gpt-4o', // GPT-4o used as API fallback for GPT-5.1 (UI removed, but API still uses it until GPT-5.1 is available)
         messages: [
           {
             role: 'user',
@@ -79,7 +82,8 @@ export async function POST(req: NextRequest) {
           throw new Error('Gemini Vision requires base64 image data')
         }
 
-        const model = (gemini as any).getGenerativeModel({ model: 'gemini-1.5-flash' })
+        // Gemini 1.5 Flash removed from UI, but use as API fallback
+        const model = (gemini as any).getGenerativeModel({ model: 'gemini-flash' }) // Try simple format first, falls back to 1.5-flash internally
         const result = await model.generateContent([
           prompt || 'Analyze this image and describe what you see in detail.',
           imagePart

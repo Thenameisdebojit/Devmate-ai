@@ -151,8 +151,13 @@ export class RuntimeKernel extends EventEmitter {
     // TASK 6: Resolve workspace via WorkspaceRegistry
     let rootPath: string
     try {
-      const workspace = WorkspaceRegistry.get(this.projectId)
-      rootPath = WorkspaceRegistry.getRootPath(this.projectId)
+      const workspace = await WorkspaceRegistry.get(this.projectId)
+      rootPath = await WorkspaceRegistry.getRootPath(this.projectId)
+      
+      // PHASE E: Invariant check - rootPath must exist
+      if (!rootPath) {
+        throw new Error(`Invariant violation: rootPath is missing for projectId: ${this.projectId}`)
+      }
       
       // TASK 6: If workspace rootPath does not exist → throw
       await fs.access(rootPath)
@@ -161,6 +166,25 @@ export class RuntimeKernel extends EventEmitter {
         throw new Error(`Workspace rootPath does not exist — workspace not initialized`)
       }
       throw new Error(`Workspace not registered for projectId: ${this.projectId}. Call /api/workspace/init first.`)
+    }
+
+    // PHASE F′-2: Check OS-level capabilities before starting runtime
+    try {
+      const { getProjectEvolutionEngineManager } = await import('@/lib/os/ProjectEvolutionEngineManager')
+      const peeManager = getProjectEvolutionEngineManager()
+      const pee = await peeManager.getEngine(this.projectId, rootPath)
+      const capabilities = pee.getCapabilities()
+      
+      if (!capabilities.run) {
+        throw new Error(`Runtime start blocked by OS: Project is in "${pee.getStage()}" stage, which doesn't allow running.`)
+      }
+    } catch (error: any) {
+      // If error is from capability check, throw it
+      if (error.message.includes('blocked by OS')) {
+        throw error
+      }
+      // If PEE check fails, log warning but don't block (backward compatibility)
+      console.warn('[RuntimeKernel] Failed to check OS capabilities:', error)
     }
 
     this.updateState({ status: 'starting' })
@@ -172,7 +196,7 @@ export class RuntimeKernel extends EventEmitter {
       if (!containerStatus || containerStatus.status !== 'running') {
         // Container not running - this should be handled by caller
         // But we'll emit event for agent observation
-        this.emitRuntimeEvent('RUNTIME_STARTED', {
+        await this.emitRuntimeEvent('RUNTIME_STARTED', {
           error: 'Container not running',
         })
         throw new Error('Container not running. Start container first.')
@@ -186,7 +210,7 @@ export class RuntimeKernel extends EventEmitter {
       })
 
       // Emit RUNTIME_STARTED event
-      this.emitRuntimeEvent('RUNTIME_STARTED', {
+      await this.emitRuntimeEvent('RUNTIME_STARTED', {
         containerId: containerStatus.id,
         port: containerStatus.port || 0,
       })
@@ -198,7 +222,7 @@ export class RuntimeKernel extends EventEmitter {
       this.detectPreviewPort()
     } catch (error: any) {
       this.updateState({ status: 'crashed' })
-      this.emitRuntimeEvent('RUNTIME_CRASHED', {
+      await this.emitRuntimeEvent('RUNTIME_CRASHED', {
         error: error.message || 'Unknown error',
       })
       throw error
@@ -238,7 +262,7 @@ export class RuntimeKernel extends EventEmitter {
     })
 
     // Emit RUNTIME_STOPPED event
-    this.emitRuntimeEvent('RUNTIME_STOPPED', {})
+    await this.emitRuntimeEvent('RUNTIME_STOPPED', {})
   }
 
   /**
@@ -271,7 +295,8 @@ export class RuntimeKernel extends EventEmitter {
       this.ptyOutputBuffer += output
       
       // Detect preview port from output
-      this.detectPreviewPortFromOutput(output)
+      // Fire and forget - async call in event handler
+      void this.detectPreviewPortFromOutput(output)
 
       // Emit output event
       this.emit('ptyOutput', { sessionId, data: output })
@@ -385,18 +410,20 @@ export class RuntimeKernel extends EventEmitter {
 
       // Monitor dev server output for port detection
       this.devServerProcess.stdout?.on('data', (data: Buffer) => {
-        this.detectPreviewPortFromOutput(data.toString())
+        // Fire and forget - async call in event handler
+        void this.detectPreviewPortFromOutput(data.toString())
       })
 
       this.devServerProcess.stderr?.on('data', (data: Buffer) => {
-        this.detectPreviewPortFromOutput(data.toString())
+        // Fire and forget - async call in event handler
+        void this.detectPreviewPortFromOutput(data.toString())
       })
 
-      this.devServerProcess.on('close', (code) => {
+      this.devServerProcess.on('close', async (code) => {
         if (code !== 0 && this.state.status === 'running') {
           // Dev server crashed
           this.updateState({ previewStatus: 'stopped' })
-          this.emitRuntimeEvent('RUNTIME_CRASHED', {
+          await this.emitRuntimeEvent('RUNTIME_CRASHED', {
             error: `Dev server exited with code ${code}`,
           })
         }
@@ -411,7 +438,7 @@ export class RuntimeKernel extends EventEmitter {
    * PHASE 5: Detect preview port from PTY/dev server output
    * Enhanced detection for multiple frameworks
    */
-  private detectPreviewPortFromOutput(output: string): void {
+  private async detectPreviewPortFromOutput(output: string): Promise<void> {
     // Try multiple regex patterns for different frameworks
     const patterns = [
       /(?:Local|ready|listening|running).*?(\d{4,5})/i,
@@ -444,7 +471,7 @@ export class RuntimeKernel extends EventEmitter {
             })
             
             // Emit preview ready event
-            this.emitRuntimeEvent('PREVIEW_READY', {
+            await this.emitRuntimeEvent('PREVIEW_READY', {
               previewUrl,
               port: previewPort,
             })
@@ -480,7 +507,7 @@ export class RuntimeKernel extends EventEmitter {
     }
 
     this.updateState({ buildStatus: 'building', buildErrors: [] })
-    this.emitRuntimeEvent('BUILD_STARTED', {})
+    await this.emitRuntimeEvent('BUILD_STARTED', {})
 
     const containerStatus = containerManager.getContainerStatus(this.projectId)
     if (!containerStatus || containerStatus.status !== 'running') {
@@ -510,31 +537,31 @@ export class RuntimeKernel extends EventEmitter {
       })
 
       await new Promise<void>((resolve, reject) => {
-        this.buildProcess!.on('close', (code) => {
+        this.buildProcess!.on('close', async (code) => {
           if (code === 0) {
             this.updateState({ buildStatus: 'success', buildErrors: [] })
-            this.emitRuntimeEvent('BUILD_SUCCEEDED', {})
+            await this.emitRuntimeEvent('BUILD_SUCCEEDED', {})
             resolve()
           } else {
             // Parse build errors
             const errors = this.parseBuildErrors(stderr + stdout)
             this.updateState({ buildStatus: 'failed', buildErrors: errors })
-            this.emitRuntimeEvent('BUILD_FAILED', { errors })
+            await this.emitRuntimeEvent('BUILD_FAILED', { errors })
             reject(new Error(`Build failed with code ${code}`))
           }
           this.buildProcess = null
         })
 
-        this.buildProcess!.on('error', (error) => {
+        this.buildProcess!.on('error', async (error) => {
           this.updateState({ buildStatus: 'failed', buildErrors: [] })
-          this.emitRuntimeEvent('BUILD_FAILED', { errors: [] })
+          await this.emitRuntimeEvent('BUILD_FAILED', { errors: [] })
           reject(error)
           this.buildProcess = null
         })
       })
     } catch (error: any) {
       this.updateState({ buildStatus: 'failed', buildErrors: [] })
-      this.emitRuntimeEvent('BUILD_FAILED', { errors: [] })
+      await this.emitRuntimeEvent('BUILD_FAILED', { errors: [] })
       throw error
     }
   }
@@ -626,12 +653,12 @@ export class RuntimeKernel extends EventEmitter {
           // Restart dev server
           await this.startDevServer()
 
-          this.emitRuntimeEvent('RUNTIME_RESTARTED', {
+          await this.emitRuntimeEvent('RUNTIME_RESTARTED', {
             reason: `File changed: ${filePath}`,
           })
         } catch (error: any) {
           console.error('Failed to restart runtime:', error)
-          this.emitRuntimeEvent('RUNTIME_CRASHED', {
+          await this.emitRuntimeEvent('RUNTIME_CRASHED', {
             error: `Restart failed: ${error.message}`,
           })
         }

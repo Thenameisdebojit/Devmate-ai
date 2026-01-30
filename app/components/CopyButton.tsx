@@ -24,7 +24,8 @@ export default function CopyButton({ text }: CopyButtonProps) {
   return (
     <button
       onClick={handleCopy}
-      className="flex items-center gap-2 px-3 py-1.5 bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 rounded-lg text-sm transition-colors"
+      className="flex items-center gap-1.5 px-2.5 py-1.5 bg-gray-800/90 hover:bg-gray-700/90 dark:bg-gray-700/90 dark:hover:bg-gray-600/90 text-gray-200 dark:text-gray-100 rounded-md text-xs font-medium transition-all duration-200 shadow-sm hover:shadow-md backdrop-blur-sm border border-gray-700/50 dark:border-gray-600/50"
+      title="Copy to clipboard"
     >
       {copied ? (
         <>

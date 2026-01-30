@@ -24,15 +24,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'File path is required' }, { status: 400 })
     }
 
-    // Ensure workspace is initialized
-    const projectPath = join(process.cwd(), 'runtime-projects', projectId)
+    // PHASE F: Ensure workspace is initialized using ProjectRootManager
+    const { getProjectRootManager } = await import('@/lib/workspace/ProjectRootManager')
+    const rootManager = getProjectRootManager()
+    const projectPath = await rootManager.getProjectRoot(projectId)
     
     try {
-      WorkspaceRegistry.get(projectId)
+      await WorkspaceRegistry.get(projectId)
     } catch {
       // Workspace not registered - initialize it
-      await fs.mkdir(projectPath, { recursive: true })
-      WorkspaceRegistry.register(projectId, projectPath)
+      await WorkspaceRegistry.register(projectId, projectPath)
     }
     
     // Ensure parent directory exists

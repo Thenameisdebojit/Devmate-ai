@@ -23,7 +23,7 @@ export interface Checkpoint {
   projectId: string
   timestamp: number
   description: string
-  type: 'auto' | 'manual' | 'pre-write'
+  type: 'auto' | 'manual' | 'pre-write' | 'generation-root' // REQUIRED FIX 3: Special type for generation root checkpoint
   files: string[] // List of files in checkpoint
   metadata: {
     trigger: string // What caused this checkpoint

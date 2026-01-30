@@ -5,6 +5,7 @@ export interface User {
   name: string
   email: string
   avatar?: string
+  role?: 'base_user' | 'super_user' | 'admin'
 }
 
 interface AuthStore {
@@ -82,18 +83,31 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     try {
       set({ isLoading: true })
       
-      const timeout = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Auth check timeout')), 5000)
-      )
+      // Use AbortController for proper timeout handling
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 3000) // 3 second timeout
       
-      const fetchPromise = fetch('/api/auth/me')
-      
-      const response = await Promise.race([fetchPromise, timeout]) as Response
-      
-      if (response.ok) {
-        const data = await response.json()
-        set({ user: data.user, isAuthenticated: true, isLoading: false })
-      } else {
+      try {
+        const response = await fetch('/api/auth/me', {
+          signal: controller.signal,
+          cache: 'no-store',
+        })
+        
+        clearTimeout(timeoutId)
+        
+        if (response.ok) {
+          const data = await response.json()
+          set({ user: data.user, isAuthenticated: true, isLoading: false })
+        } else {
+          set({ user: null, isAuthenticated: false, isLoading: false })
+        }
+      } catch (fetchError: any) {
+        clearTimeout(timeoutId)
+        if (fetchError.name === 'AbortError') {
+          console.warn('Auth check timed out, proceeding as unauthenticated')
+        } else {
+          console.error('Auth check fetch error:', fetchError)
+        }
         set({ user: null, isAuthenticated: false, isLoading: false })
       }
     } catch (error) {

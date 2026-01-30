@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { FiTerminal, FiX, FiPlus, FiChevronDown, FiMaximize2, FiMinimize2, FiTrash2 } from 'react-icons/fi'
+import TerminalTab from './TerminalTab'
 
 interface TerminalTab {
   id: string
@@ -21,6 +22,21 @@ export default function IDETerminalPanel({ projectId, isVisible, onClose }: IDET
   const [activeTabId, setActiveTabId] = useState<string | null>(null)
   const [isMinimized, setIsMinimized] = useState(false)
   const terminalContainerRef = useRef<HTMLDivElement>(null)
+
+  // Auto-create terminal tab when panel becomes visible and projectId is available
+  useEffect(() => {
+    if (isVisible && projectId && tabs.length === 0) {
+      const newTab: TerminalTab = {
+        id: `terminal-${Date.now()}`,
+        name: 'powershell',
+        projectId: projectId,
+        createdAt: Date.now(),
+      }
+      setTabs([newTab])
+      setActiveTabId(newTab.id)
+      setIsMinimized(false)
+    }
+  }, [isVisible, projectId, tabs.length])
 
   // Listen for new terminal requests
   useEffect(() => {
@@ -135,10 +151,13 @@ export default function IDETerminalPanel({ projectId, isVisible, onClose }: IDET
               key={tab.id}
               className={`absolute inset-0 ${activeTabId === tab.id ? 'block' : 'hidden'}`}
             >
-              <TerminalInstance
+              <TerminalTab
+                tabId={tab.id}
                 projectId={tab.projectId}
-                terminalId={tab.id}
-                containerRef={terminalContainerRef}
+                profile={tab.name}
+                onReady={() => {
+                  console.log(`[IDETerminalPanel] Terminal tab ${tab.id} ready`)
+                }}
               />
             </div>
           ))}
@@ -154,206 +173,5 @@ export default function IDETerminalPanel({ projectId, isVisible, onClose }: IDET
         </div>
       )}
     </div>
-  )
-}
-
-// Optimized Terminal Instance Component
-function TerminalInstance({
-  projectId,
-  terminalId,
-  containerRef,
-}: {
-  projectId: string
-  terminalId: string
-  containerRef: React.RefObject<HTMLDivElement>
-}) {
-  const terminalRef = useRef<HTMLDivElement>(null)
-  const xtermInstanceRef = useRef<any>(null)
-  const fitAddonRef = useRef<any>(null)
-  const eventSourceRef = useRef<EventSource | null>(null)
-  const inputBufferRef = useRef<string>('')
-  const outputBufferRef = useRef<string>('')
-  const flushTimerRef = useRef<NodeJS.Timeout | null>(null)
-  const [isConnected, setIsConnected] = useState(false)
-
-  useEffect(() => {
-    if (!terminalRef.current || !projectId) return
-
-    let mounted = true
-
-    const initTerminal = async () => {
-      try {
-        const [{ Terminal }, { FitAddon }] = await Promise.all([
-          import('@xterm/xterm'),
-          import('@xterm/addon-fit'),
-        ])
-        await import('@xterm/xterm/css/xterm.css')
-
-        if (!mounted || !terminalRef.current) return
-
-        // Initialize xterm.js with performance optimizations
-        const xterm = new Terminal({
-          cursorBlink: true,
-          fontSize: 14,
-          fontFamily: 'Consolas, "Courier New", monospace',
-          theme: {
-            background: '#1e1e1e',
-            foreground: '#d4d4d4',
-            cursor: '#aeafad',
-            cursorAccent: '#000000',
-            selection: '#264f78',
-            selectionForeground: '#ffffff',
-          },
-          allowProposedApi: true,
-          scrollback: 10000,
-          tabStopWidth: 4,
-          bellStyle: 'none',
-          convertEol: true,
-          disableStdin: false,
-        })
-
-        const fitAddon = new FitAddon()
-        
-        xterm.loadAddon(fitAddon)
-
-        xterm.open(terminalRef.current)
-        fitAddon.fit()
-
-        xtermInstanceRef.current = xterm
-        fitAddonRef.current = fitAddon
-
-        // Connect to local terminal stream
-        const eventSource = new EventSource(`/api/terminal/local?projectId=${projectId}`)
-        eventSourceRef.current = eventSource
-
-        // Buffered output handler for performance
-        const flushOutput = () => {
-          if (outputBufferRef.current && xtermInstanceRef.current) {
-            xtermInstanceRef.current.write(outputBufferRef.current)
-            outputBufferRef.current = ''
-          }
-          if (flushTimerRef.current) {
-            clearTimeout(flushTimerRef.current)
-            flushTimerRef.current = null
-          }
-        }
-
-        eventSource.onmessage = (event) => {
-          try {
-            const data = JSON.parse(event.data)
-            if (data.type === 'output') {
-              // Buffer output for performance
-              outputBufferRef.current += data.data
-              if (!flushTimerRef.current) {
-                flushTimerRef.current = setTimeout(flushOutput, 16) // ~60fps
-              }
-            } else if (data.type === 'error') {
-              xterm.write(`\x1b[31m${data.data}\x1b[0m`)
-            } else if (data.type === 'connected') {
-              setIsConnected(true)
-              xterm.write('\x1b[32mConnected to PowerShell terminal\x1b[0m\r\n')
-            }
-          } catch (error) {
-            console.error('Terminal message error:', error)
-          }
-        }
-
-        eventSource.onerror = () => {
-          setIsConnected(false)
-          xterm.write('\r\n\x1b[31mConnection lost. Reconnecting...\x1b[0m\r\n')
-        }
-
-        // Handle terminal input - send immediately for responsiveness (no debounce)
-        xterm.onData((data: string) => {
-          fetch('/api/terminal/local', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ projectId, input: data }),
-          }).catch((error) => {
-            console.error('Failed to send terminal input:', error)
-          })
-        })
-
-        // Listen for terminal commands (from run/debug buttons)
-        const handleTerminalCommand = (event: CustomEvent) => {
-          if (event.detail.projectId === projectId && event.detail.command) {
-            // Write command to terminal
-            xterm.write('\r\n') // New line
-            xterm.write(`\x1b[33m> ${event.detail.command}\x1b[0m\r\n`) // Show command in yellow
-            fetch('/api/terminal/local', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ projectId, input: event.detail.command + '\r\n' }),
-            }).catch((error) => {
-              console.error('Failed to send terminal command:', error)
-            })
-          }
-        }
-        window.addEventListener('terminal-command', handleTerminalCommand as EventListener)
-
-        // Handle resize with debouncing
-        let resizeTimer: NodeJS.Timeout | null = null
-        const handleResize = () => {
-          if (resizeTimer) clearTimeout(resizeTimer)
-          resizeTimer = setTimeout(() => {
-            fitAddon.fit()
-            const dimensions = fitAddon.proposeDimensions()
-            if (dimensions) {
-              fetch('/api/terminal/local', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  projectId,
-                  resize: { cols: dimensions.cols, rows: dimensions.rows },
-                }),
-              }).catch((error) => {
-                console.error('Failed to send resize:', error)
-              })
-            }
-            resizeTimer = null
-          }, 150)
-        }
-
-        // Use ResizeObserver for better performance
-        let resizeObserver: ResizeObserver | null = null
-        if (containerRef.current) {
-          resizeObserver = new ResizeObserver(handleResize)
-          resizeObserver.observe(containerRef.current)
-        }
-
-        window.addEventListener('resize', handleResize)
-        
-        return () => {
-          if (resizeObserver) {
-            resizeObserver.disconnect()
-          }
-          window.removeEventListener('resize', handleResize)
-          window.removeEventListener('terminal-command', handleTerminalCommand as EventListener)
-          if (resizeTimer) clearTimeout(resizeTimer)
-          if (flushTimerRef.current) clearTimeout(flushTimerRef.current)
-          eventSource.close()
-          xterm.dispose()
-        }
-      } catch (error) {
-        console.error('Failed to load terminal:', error)
-      }
-    }
-
-    initTerminal()
-
-    return () => {
-      mounted = false
-      eventSourceRef.current?.close()
-      if (xtermInstanceRef.current) {
-        xtermInstanceRef.current.dispose()
-      }
-      if (flushTimerRef.current) {
-        clearTimeout(flushTimerRef.current)
-      }
-    }
-  }, [projectId, terminalId, containerRef])
-
-  return (
-    <div ref={terminalRef} className="h-full w-full bg-gray-900 p-2" />
   )
 }

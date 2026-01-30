@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 
-export type AIModelSelection = 'auto' | 'chatgpt-5' | 'gemini-2.5-pro' | 'gemini-2.5-flash' | 'grok-4' | 'grok-2-1212' | 'grok-vision-beta'
+export type AIModelSelection = 'auto' | 'gpt-5.1' | 'gemini-3-pro' | 'gemini-2.5-flash' | 'grok-4' | 'kimi-k2' | 'deepseek-3'
 
 export interface Message {
   id: string

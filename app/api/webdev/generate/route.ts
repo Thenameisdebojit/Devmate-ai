@@ -41,15 +41,17 @@ export async function POST(req: NextRequest) {
 
         send({ type: 'status', message: 'Starting project generation...' })
 
-        const systemInstruction = `You are an expert full-stack developer. Generate COMPLETE, PRODUCTION-READY code based on the plan.
+        const systemInstruction = `You are an expert full-stack developer. Generate COMPLETE, PRODUCTION-READY, OPTIMIZED code based on the plan.
 
 CRITICAL REQUIREMENTS:
 1. Generate ALL files mentioned in the plan
 2. Include COMPLETE code - no placeholders, no TODOs
 3. Add proper error handling and validation
-4. Include comments for complex logic
+4. MINIMAL comments - only for truly complex logic, keep code self-documenting
 5. Follow best practices for the chosen framework
 6. Make code copy-paste ready
+7. OPTIMIZE for performance - efficient code, minimal bundle size, fast execution
+8. Keep comments MINIMAL - code should be clean and readable without excessive comments
 
 Plan:
 ${JSON.stringify(plan, null, 2)}
@@ -71,8 +73,8 @@ Also include setup instructions at the end.`
             domain: 'web-dev',
             action: 'generate',
             systemInstruction,
-            temperature: 0.4,
-            maxTokens: 8192,
+            temperature: 0.3, // Balanced temperature for optimized but complete code
+            maxTokens: 8192, // Sufficient for complete code without being excessive
           }, selectedModel)
         } catch (aiError: any) {
           console.error('AI model error:', aiError)

@@ -14,7 +14,7 @@
  */
 
 import { promises as fs } from 'fs'
-import { join, dirname } from 'path'
+import { join, dirname, normalize } from 'path'
 import { WorkspaceRegistry } from '@/lib/workspace/WorkspaceRegistry'
 import { getAgentConfidenceEngine, type ConfidenceReport } from '@/core/workspace/AgentConfidenceEngine'
 import { checkpointEngine } from '@/lib/runtime/checkpointEngine'
@@ -46,6 +46,7 @@ export interface FileChangeSet {
   reason: string
   confidenceSnapshot?: ConfidenceReport
   checkpointId?: string
+  mode?: 'normal' | 'generation' // Generation mode bypasses context/confidence checks
 }
 
 export interface MutationResult {
@@ -86,7 +87,42 @@ export class FileMutationKernel {
       createCheckpoint: shouldCreateCheckpoint = true,
     } = options || {}
 
-    // Validate change set
+    // PHASE E: Invariant check - rootPath must exist
+    if (!this.projectRoot) {
+      throw new Error(`Invariant violation: FileMutationKernel.projectRoot is missing for projectId: ${this.projectId}`)
+    }
+
+    // Generation mode: bypass context and confidence checks
+    const isGenerationMode = changeSet.mode === 'generation'
+    
+    // PHASE F′-2: Check OS-level capabilities (unless in generation mode)
+    if (!isGenerationMode) {
+      try {
+        const { getProjectEvolutionEngineManager } = await import('@/lib/os/ProjectEvolutionEngineManager')
+        const peeManager = getProjectEvolutionEngineManager()
+        const pee = peeManager.getEngineSync(this.projectId)
+        
+        if (pee) {
+          const capabilities = pee.getCapabilities()
+          if (capabilities.aiWrite === false) {
+            return {
+              success: false,
+              appliedChanges: [],
+              failedChanges: changeSet.changes.map((c) => ({
+                change: c,
+                error: `File writes blocked by OS: Project is in "${pee.getStage()}" stage, which doesn't allow AI writes.`,
+              })),
+              error: `File writes not allowed in current project stage: ${pee.getStage()}`,
+            }
+          }
+        }
+      } catch (error: any) {
+        // If PEE check fails, log warning but don't block (backward compatibility)
+        console.warn('[FileMutationKernel] Failed to check OS capabilities:', error)
+      }
+    }
+    
+    // Validate change set (always validate, even in generation mode)
     const validation = this.validateChangeSet(changeSet)
     if (!validation.valid) {
       return {
@@ -100,8 +136,8 @@ export class FileMutationKernel {
       }
     }
 
-    // Check confidence gate
-    if (requireHighConfidence) {
+    // Check confidence gate (bypassed in generation mode)
+    if (!isGenerationMode && requireHighConfidence) {
       const confidenceEngine = getAgentConfidenceEngine(this.projectId)
       const report = confidenceEngine.getCurrentReport()
       if (report.confidenceLevel !== 'HIGH' || report.riskLevel !== 'LOW') {
@@ -142,8 +178,10 @@ export class FileMutationKernel {
         }
       }
     } else {
-      // PHASE 4: Warn if checkpoint not requested for AI writes
-      console.warn('[FileMutationKernel] Mutation requested without checkpoint. This should only happen for manual user edits.')
+      // PHASE 4: Warn if checkpoint not requested for AI writes (but allow in generation mode)
+      if (!isGenerationMode) {
+        console.warn('[FileMutationKernel] Mutation requested without checkpoint. This should only happen for manual user edits.')
+      }
     }
 
     // Apply changes transactionally
@@ -155,7 +193,19 @@ export class FileMutationKernel {
         try {
           await this.applyChange(change)
           appliedChanges.push(change)
+          // PHASE F: Log successful file creation for debugging
+          if (change.type === 'create' && isGenerationMode) {
+            console.log(`[FileMutationKernel] Successfully created file: ${change.path}`)
+          }
         } catch (error: any) {
+          // PHASE F: Log detailed error for debugging
+          console.error(`[FileMutationKernel] Failed to apply change: ${change.path}`, {
+            type: change.type,
+            error: error.message,
+            projectId: this.projectId,
+            rootPath: this.projectRoot,
+            fullPath: join(this.projectRoot, change.path),
+          })
           failedChanges.push({
             change,
             error: error.message || 'Unknown error',
@@ -163,21 +213,66 @@ export class FileMutationKernel {
         }
       }
 
-      // If any change failed, rollback all
+      // If any change failed, rollback all (unless in generation mode, where we allow partial success)
       if (failedChanges.length > 0 && appliedChanges.length > 0) {
-        await this.rollbackChanges(appliedChanges, checkpointId)
+        // PHASE F: In generation mode, allow partial success (some files created is better than none)
+        if (!isGenerationMode) {
+          await this.rollbackChanges(appliedChanges, checkpointId)
+          return {
+            success: false,
+            appliedChanges: [],
+            failedChanges,
+            checkpointId,
+            error: 'Transaction failed: rolled back all changes',
+          }
+        } else {
+          // Generation mode: log failures but continue with successful changes
+          console.warn(`[FileMutationKernel] Generation mode: ${failedChanges.length} file(s) failed, but ${appliedChanges.length} file(s) succeeded. Continuing with successful changes.`)
+        }
+      }
+      
+      // If all changes failed, return error
+      if (failedChanges.length > 0 && appliedChanges.length === 0) {
         return {
           success: false,
           appliedChanges: [],
           failedChanges,
           checkpointId,
-          error: 'Transaction failed: rolled back all changes',
+          error: `All changes failed. First error: ${failedChanges[0].error}`,
         }
       }
 
+      // PHASE E: Verify files were written to disk (invariant check)
+      const { promises: fs } = await import('fs')
+      const writtenFiles: string[] = []
+      for (const change of appliedChanges) {
+        if (change.type !== 'delete') {
+          const fullPath = join(this.projectRoot, change.path)
+          try {
+            await fs.access(fullPath)
+            writtenFiles.push(change.path)
+          } catch (err) {
+            // Hard error if file not found after write
+            throw new Error(
+              `Invariant violation: File not found on disk after write. ` +
+              `projectId: ${this.projectId}, filePath: ${change.path}, fullPath: ${fullPath}, rootPath: ${this.projectRoot}`
+            )
+          }
+        }
+      }
+      
+      // Verify all files were written
+      if (writtenFiles.length !== appliedChanges.filter(c => c.type !== 'delete').length) {
+        throw new Error(
+          `Invariant violation: Not all files were written to disk. ` +
+          `projectId: ${this.projectId}, expected: ${appliedChanges.filter(c => c.type !== 'delete').length}, ` +
+          `written: ${writtenFiles.length}, rootPath: ${this.projectRoot}`
+        )
+      }
+
       // Emit FILE_CHANGED and FILE_SAVED events for successful changes
-      // Use WorkspaceRegistry to get workspace (never create it here)
-      const workspace = WorkspaceRegistry.get(this.projectId)
+      // PHASE F: Use WorkspaceRegistry to get workspace (never create it here)
+      const workspace = await WorkspaceRegistry.get(this.projectId)
       for (const change of appliedChanges) {
         if (change.type !== 'delete') {
           // Emit FILE_CHANGED for UI updates (file list refresh)
@@ -243,10 +338,23 @@ export class FileMutationKernel {
           throw new Error('Create requires fullContent or diff')
         }
         // Ensure directory exists
-        await fs.mkdir(dirname(fullPath), { recursive: true })
+        const dir = dirname(fullPath)
+        await fs.mkdir(dir, { recursive: true })
         // fullContent can be empty string for new files, or use diff
         const createContent = change.fullContent !== undefined ? change.fullContent : this.applyDiff('', change.diff!)
+        console.log(`[FileMutationKernel] Creating file: ${change.path}`, { 
+          fullPath, 
+          contentLength: createContent.length,
+          projectRoot: this.projectRoot
+        })
         await fs.writeFile(fullPath, createContent, 'utf-8')
+        // Verify file was written
+        try {
+          const stats = await fs.stat(fullPath)
+          console.log(`[FileMutationKernel] File created successfully: ${change.path}`, { size: stats.size })
+        } catch (statError) {
+          console.error(`[FileMutationKernel] ERROR: File created but cannot stat: ${change.path}`, statError)
+        }
         break
 
       case 'modify':
@@ -376,8 +484,36 @@ export class FileMutationKernel {
 const kernelInstances = new Map<string, FileMutationKernel>()
 
 export function getFileMutationKernel(projectId: string, projectRoot: string): FileMutationKernel {
+  // PHASE E: Invariant checks
+  if (!projectId) {
+    throw new Error('Invariant violation: projectId is required for getFileMutationKernel')
+  }
+  if (!projectRoot) {
+    throw new Error(`Invariant violation: projectRoot is required for projectId: ${projectId}`)
+  }
+  
+  // Normalize paths for consistent comparison (handles Windows case sensitivity and separators)
+  const normalizedProjectRoot = normalize(projectRoot)
+  
   if (!kernelInstances.has(projectId)) {
-    kernelInstances.set(projectId, new FileMutationKernel(projectId, projectRoot))
+    kernelInstances.set(projectId, new FileMutationKernel(projectId, normalizedProjectRoot))
+  } else {
+    // PHASE E: Verify rootPath consistency (hard error on mismatch)
+    const existing = kernelInstances.get(projectId)!
+    const existingRoot = (existing as any).projectRoot
+    const normalizedExistingRoot = normalize(existingRoot)
+    
+    // Compare normalized paths
+    if (normalizedExistingRoot !== normalizedProjectRoot) {
+      // If paths don't match, destroy old instance and create new one with correct path
+      console.warn(
+        `[FileMutationKernel] Root path mismatch detected. ` +
+        `projectId: ${projectId}, existingRoot: ${existingRoot}, requestedRoot: ${projectRoot}. ` +
+        `Recreating kernel instance with correct path.`
+      )
+      kernelInstances.delete(projectId)
+      kernelInstances.set(projectId, new FileMutationKernel(projectId, normalizedProjectRoot))
+    }
   }
   return kernelInstances.get(projectId)!
 }

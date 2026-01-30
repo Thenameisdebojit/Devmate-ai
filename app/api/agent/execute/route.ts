@@ -60,6 +60,29 @@ export async function POST(req: NextRequest) {
       )
     }
 
+    // PHASE C: Reject empty generate intents - these are handled by UI-level bootstrap
+    if (executionIntent.type === 'generate') {
+      const isEmptyIntent = (executionIntent as any).isEmptyIntent === true
+      
+      // Check if workspace is empty
+      let fileCount = 0
+      try {
+        const { BootstrapGenerator } = await import('@/lib/bootstrap/BootstrapGenerator')
+        const rootPath = await WorkspaceRegistry.getRootPath(projectId)
+        fileCount = await BootstrapGenerator.getFileCount(rootPath)
+      } catch (error) {
+        // If workspace not registered, assume empty
+        fileCount = 0
+      }
+
+      if (isEmptyIntent || fileCount === 0) {
+        return NextResponse.json(
+          { error: 'Project creation is handled by the IDE, not the agent. Use the UI to create a new project.' },
+          { status: 400 }
+        )
+      }
+    }
+
     // PHASE 2: Default domain if not provided (for backward compatibility during transition)
     const sessionDomain = domain || 'app-generator'
 
@@ -75,8 +98,12 @@ export async function POST(req: NextRequest) {
     let rootPath
     
     try {
-      workspace = WorkspaceRegistry.get(projectId)
-      rootPath = WorkspaceRegistry.getRootPath(projectId)
+      workspace = await WorkspaceRegistry.get(projectId)
+      rootPath = await WorkspaceRegistry.getRootPath(projectId)
+      // PHASE E: Invariant check
+      if (!rootPath) {
+        throw new Error(`Invariant violation: rootPath is missing for projectId: ${projectId}`)
+      }
     } catch (error: any) {
       // Workspace not registered - auto-initialize it
       console.log('[api/agent/execute] Workspace not registered, initializing...', projectId)
@@ -85,10 +112,16 @@ export async function POST(req: NextRequest) {
         const { default: fs } = await import('fs/promises')
         const { join } = await import('path')
         
-        rootPath = join(process.cwd(), 'runtime-projects', projectId)
-        await fs.mkdir(rootPath, { recursive: true })
+        // PHASE F: Use ProjectRootManager for persistent roots
+        const { getProjectRootManager } = await import('@/lib/workspace/ProjectRootManager')
+        const rootManager = getProjectRootManager()
+        rootPath = await rootManager.getProjectRoot(projectId)
         
-        workspace = WorkspaceRegistry.register(projectId, rootPath)
+        workspace = await WorkspaceRegistry.register(projectId, rootPath)
+        // PHASE E: Verify registration succeeded
+        if (!workspace) {
+          throw new Error(`Invariant violation: Workspace registration failed for projectId: ${projectId}, rootPath: ${rootPath}`)
+        }
         console.log('[api/agent/execute] Workspace auto-initialized:', { projectId, rootPath })
       } catch (initError: any) {
         console.error('[api/agent/execute] Failed to auto-initialize workspace:', initError)
@@ -159,6 +192,14 @@ export async function POST(req: NextRequest) {
             return // Skip noisy events
           }
 
+          // PHASE E: Prevent duplicate AGENT_DONE and ASSISTANT_MESSAGE events
+          const eventId = `${event.type}-${JSON.stringify(event.payload)}`
+          if (sentEventIds.has(eventId)) {
+            console.warn(`[SSE] Duplicate event prevented: ${event.type}`, { projectId, sessionId })
+            return
+          }
+          sentEventIds.add(eventId)
+
           eventBuffer.push(event)
           
           // Flush immediately if buffer is full or for critical events
@@ -172,6 +213,9 @@ export async function POST(req: NextRequest) {
             }
           }
         }
+        
+        // PHASE E: Track sent events to prevent duplicates
+        const sentEventIds = new Set<string>()
 
         try {
           const router = getAgentExecutionRouter()
@@ -199,10 +243,10 @@ export async function POST(req: NextRequest) {
           // Flush buffer before sending error
           flushEvents()
           
-          // Provide detailed error message
+          // PHASE E: Provide detailed error message with context (dev-readable, user-friendly)
           let errorMessage = error.message || 'Execution failed'
           
-          // Add context for common errors
+          // Add context for common errors (user-friendly)
           if (error.message?.includes('Workspace not initialized')) {
             errorMessage = 'Workspace not initialized. Please refresh the page.'
           } else if (error.message?.includes('empty')) {
@@ -210,6 +254,16 @@ export async function POST(req: NextRequest) {
           } else if (error.message?.includes('Invalid execution intent')) {
             errorMessage = `${error.message}. Please choose an action (Generate / Run / Fix / Explain).`
           }
+          
+          // PHASE E: Log detailed error context (dev-only, not user-visible)
+          console.error('[EXECUTION_ERROR]', {
+            projectId,
+            sessionId,
+            intentType: executionIntent?.type,
+            rootPath,
+            error: error.message,
+            stack: error.stack,
+          })
           
           sendEvent({
             type: 'EXECUTION_ERROR',

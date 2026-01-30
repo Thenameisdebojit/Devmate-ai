@@ -17,7 +17,7 @@
  */
 
 import { WorkspaceDaemon } from '@/core/workspace/WorkspaceDaemon'
-import { join } from 'path'
+import { getProjectRootManager } from './ProjectRootManager'
 
 interface WorkspaceEntry {
   daemon: WorkspaceDaemon
@@ -35,24 +35,40 @@ class WorkspaceRegistryImpl {
   /**
    * Register a workspace for a project
    * 
+   * PHASE F: Uses ProjectRootManager for persistent roots
+   * 
    * @param projectId - Project identifier
-   * @param rootPath - Root path of the workspace (will be computed if not provided)
+   * @param rootPath - Root path of the workspace (will be resolved from ProjectRootManager if not provided)
    * @returns The registered WorkspaceDaemon instance
    */
-  register(projectId: string, rootPath?: string): WorkspaceDaemon {
+  async register(projectId: string, rootPath?: string): Promise<WorkspaceDaemon> {
+    // PHASE E: Invariant checks
     if (!projectId) {
-      throw new Error('Project ID is required')
+      throw new Error('Invariant violation: Project ID is required for WorkspaceRegistry.register')
     }
 
-    // Compute rootPath if not provided (standard pattern)
-    const computedRootPath = rootPath || join(process.cwd(), 'runtime-projects', projectId)
+    // PHASE F: Use ProjectRootManager for persistent roots
+    let computedRootPath: string
+    if (rootPath) {
+      computedRootPath = rootPath
+    } else {
+      const rootManager = getProjectRootManager()
+      computedRootPath = await rootManager.getProjectRoot(projectId)
+    }
+    
+    if (!computedRootPath) {
+      throw new Error(`Invariant violation: rootPath is missing for projectId: ${projectId}`)
+    }
 
     // If workspace already exists, return existing (don't create duplicate)
     if (this.workspaces.has(projectId)) {
       const existing = this.workspaces.get(projectId)!
-      // Update rootPath if provided and different
+      // PHASE E: Hard error on rootPath mismatch (don't silently update)
       if (rootPath && existing.rootPath !== rootPath) {
-        existing.rootPath = rootPath
+        throw new Error(
+          `Invariant violation: Workspace already registered with different rootPath. ` +
+          `projectId: ${projectId}, existing: ${existing.rootPath}, requested: ${rootPath}`
+        )
       }
       return existing.daemon
     }
@@ -82,17 +98,31 @@ class WorkspaceRegistryImpl {
    * @returns The WorkspaceDaemon instance
    * @throws Error if workspace is not registered
    */
-  get(projectId: string): WorkspaceDaemon {
+  /**
+   * Get workspace for a project
+   * 
+   * PHASE F: Auto-registers workspace if not found, using ProjectRootManager
+   * 
+   * @param projectId - Project identifier
+   * @returns The WorkspaceDaemon instance
+   * @throws Error if workspace cannot be registered or accessed
+   */
+  async get(projectId: string): Promise<WorkspaceDaemon> {
     if (!projectId) {
       throw new Error('Project ID is required')
     }
 
-    const entry = this.workspaces.get(projectId)
+    let entry = this.workspaces.get(projectId)
     if (!entry) {
-      throw new Error(
-        `Workspace not registered for projectId: ${projectId}. ` +
-        `Call WorkspaceRegistry.register(projectId) first via /api/workspace/init`
-      )
+      // PHASE F: Auto-register using ProjectRootManager if not found
+      const rootManager = getProjectRootManager()
+      const rootPath = await rootManager.getProjectRoot(projectId)
+      return await this.register(projectId, rootPath)
+    }
+
+    // PHASE E: Invariant check - rootPath must exist
+    if (!entry.rootPath) {
+      throw new Error(`Invariant violation: WorkspaceRegistry entry has no rootPath for projectId: ${projectId}`)
     }
 
     return entry.daemon
@@ -101,21 +131,29 @@ class WorkspaceRegistryImpl {
   /**
    * Get root path for a project
    * 
+   * PHASE F: Auto-registers workspace if not found, using ProjectRootManager
+   * 
    * @param projectId - Project identifier
    * @returns The root path of the workspace
-   * @throws Error if workspace is not registered
+   * @throws Error if workspace cannot be registered or accessed
    */
-  getRootPath(projectId: string): string {
+  async getRootPath(projectId: string): Promise<string> {
     if (!projectId) {
       throw new Error('Project ID is required')
     }
 
-    const entry = this.workspaces.get(projectId)
+    let entry = this.workspaces.get(projectId)
     if (!entry) {
-      throw new Error(
-        `Workspace not registered for projectId: ${projectId}. ` +
-        `Call WorkspaceRegistry.register(projectId) first via /api/workspace/init`
-      )
+      // PHASE F: Auto-register using ProjectRootManager if not found
+      const rootManager = getProjectRootManager()
+      const rootPath = await rootManager.getProjectRoot(projectId)
+      await this.register(projectId, rootPath)
+      entry = this.workspaces.get(projectId)!
+    }
+
+    // PHASE E: Invariant check - rootPath must exist
+    if (!entry.rootPath) {
+      throw new Error(`Invariant violation: WorkspaceRegistry entry has no rootPath for projectId: ${projectId}`)
     }
 
     return entry.rootPath

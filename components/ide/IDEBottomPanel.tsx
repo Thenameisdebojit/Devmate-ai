@@ -6,13 +6,14 @@
  * Toggle between Terminal / Preview / Console
  */
 
-import { useState } from 'react'
-import { FiTerminal, FiEye, FiAlertCircle } from 'react-icons/fi'
+import { useState, useEffect } from 'react'
+import { FiTerminal, FiEye, FiAlertCircle, FiXCircle } from 'react-icons/fi'
 import IDETerminalPanel from './IDETerminalPanel'
 import IDEPreviewPane from './IDEPreviewPane'
 import IDEConsolePanel from './IDEConsolePanel'
+import ProblemsPanel, { Problem } from './ProblemsPanel'
 
-type TabType = 'terminal' | 'preview' | 'console'
+type TabType = 'terminal' | 'preview' | 'console' | 'problems'
 
 interface IDEBottomPanelProps {
   projectId?: string
@@ -23,6 +24,9 @@ interface IDEBottomPanelProps {
   onErrorClick?: (file: string, line: number) => void
   isVisible: boolean
   onClose: () => void
+  defaultTab?: 'terminal' | 'preview' | 'console' | 'problems'
+  problems?: Problem[]
+  onProblemClick?: (problem: Problem) => void
 }
 
 export default function IDEBottomPanel({
@@ -34,8 +38,18 @@ export default function IDEBottomPanel({
   onErrorClick,
   isVisible,
   onClose,
+  defaultTab = 'terminal',
+  problems = [],
+  onProblemClick,
 }: IDEBottomPanelProps) {
-  const [activeTab, setActiveTab] = useState<TabType>('terminal')
+  const [activeTab, setActiveTab] = useState<TabType>(defaultTab)
+  
+  // Update active tab when defaultTab changes (e.g., when opening terminal via toggle)
+  useEffect(() => {
+    if (isVisible && defaultTab) {
+      setActiveTab(defaultTab)
+    }
+  }, [isVisible, defaultTab])
 
   if (!isVisible) return null
 
@@ -70,7 +84,7 @@ export default function IDEBottomPanel({
         </button>
         <button
           onClick={() => setActiveTab('console')}
-          className={`h-full px-4 flex items-center gap-2 text-xs transition-colors ${
+          className={`h-full px-4 flex items-center gap-2 text-xs border-r border-gray-200 dark:border-gray-700 transition-colors ${
             activeTab === 'console'
               ? 'bg-gray-200 dark:bg-gray-700 font-medium text-gray-900 dark:text-gray-100'
               : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
@@ -81,6 +95,22 @@ export default function IDEBottomPanel({
           {buildErrors.length > 0 && (
             <span className="px-1.5 py-0.5 text-xs font-medium bg-red-500 text-white rounded">
               {buildErrors.length}
+            </span>
+          )}
+        </button>
+        <button
+          onClick={() => setActiveTab('problems')}
+          className={`h-full px-4 flex items-center gap-2 text-xs transition-colors ${
+            activeTab === 'problems'
+              ? 'bg-gray-200 dark:bg-gray-700 font-medium text-gray-900 dark:text-gray-100'
+              : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
+          }`}
+        >
+          <FiXCircle className="w-3 h-3" />
+          <span>Problems</span>
+          {problems.length > 0 && (
+            <span className="px-1.5 py-0.5 text-xs font-medium bg-red-500 text-white rounded">
+              {problems.filter(p => p.severity === 'error').length}
             </span>
           )}
         </button>
@@ -109,6 +139,13 @@ export default function IDEBottomPanel({
             buildErrors={buildErrors}
             onErrorClick={onErrorClick}
             runtimeState={runtimeState}
+          />
+        )}
+        {activeTab === 'problems' && (
+          <ProblemsPanel
+            projectId={projectId}
+            problems={problems}
+            onProblemClick={onProblemClick}
           />
         )}
       </div>

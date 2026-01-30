@@ -24,8 +24,8 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    const workspace = WorkspaceRegistry.get(projectId)
-    const projectRoot = workspace.getRootPath()
+    const workspace = await WorkspaceRegistry.get(projectId)
+    const projectRoot = await WorkspaceRegistry.getRootPath(projectId)
 
     const oldFullPath = join(projectRoot, oldPath)
     const newFullPath = join(projectRoot, newPath)

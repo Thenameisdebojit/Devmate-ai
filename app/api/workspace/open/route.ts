@@ -90,8 +90,8 @@ export async function POST(req: NextRequest) {
       WorkspaceRegistry.reset(projectId)
     }
     
-    // TASK 7: Create and bind new WorkspaceDaemon, register it under the SAME projectId
-    const daemon = WorkspaceRegistry.register(projectId, resolvedPath)
+    // PHASE F: Create and bind new WorkspaceDaemon, register it under the SAME projectId
+    const daemon = await WorkspaceRegistry.register(projectId, resolvedPath)
     
     // TASK 7: Rebind RuntimeKernel (kernel will verify workspace exists in startRuntime)
     const kernel = RuntimeKernel.get(projectId)

@@ -14,6 +14,10 @@ A modern, full-stack AI coding assistant powered by **OpenAI GPT-5** and **Googl
 2. **Fill in your API keys in `.env.local`:**
    - `OPENAI_API_KEY` - Get from https://platform.openai.com/api-keys
    - `GEMINI_API_KEY` - Get from https://ai.google.dev/gemini-api/docs/api-key
+   - `XAI_API_KEY` - Get from https://console.x.ai (optional, for Grok 4)
+   - `DEEPSEEK_API_KEY` - Get from https://platform.deepseek.com (optional, for DeepSeek 3)
+   - `MOONSHOT_API_KEY` - Get from https://platform.moonshot.cn (optional, for Kimi K2)
+   - `TAVILY_API_KEY` - Get from https://tavily.com (optional, for web search in Research domain)
    - `MONGODB_URI` - Get from https://www.mongodb.com/cloud/atlas
    - `JWT_SECRET` - Any random secure string (32+ characters)
    - `USE_AI_ORCHESTRATOR` - Set to `true` to enable hybrid AI routing (recommended)

@@ -20,6 +20,7 @@
 import { promises as fs } from 'fs'
 import { join } from 'path'
 import { getFileMutationKernel } from '@/lib/workspace/FileMutationKernel'
+import { getProjectRootManager } from '@/lib/workspace/ProjectRootManager'
 
 export type BootstrapPlatform = 'web' | 'node' | 'react'
 
@@ -88,14 +89,32 @@ export class BootstrapGenerator {
    * Run bootstrap generation
    */
   static async run(options: BootstrapOptions): Promise<BootstrapResult> {
-    const { projectId, rootPath, platform = 'web' } = options
+    const { projectId, rootPath: providedRootPath, platform = 'web' } = options
 
     try {
-      // Ensure project root exists
-      await fs.mkdir(rootPath, { recursive: true })
+      // PHASE E: Invariant checks
+      if (!projectId) {
+        throw new Error('Invariant violation: projectId is required for BootstrapGenerator')
+      }
+      
+      // PHASE F: Use ProjectRootManager if rootPath not provided
+      let finalRootPath = providedRootPath
+      if (!finalRootPath) {
+        const rootManager = getProjectRootManager()
+        finalRootPath = await rootManager.getProjectRoot(projectId)
+        // PHASE F: Initialize git repository on first bootstrap
+        await rootManager.initializeGit(projectId)
+      }
+      
+      if (!finalRootPath) {
+        throw new Error(`Invariant violation: rootPath is missing for projectId: ${projectId}`)
+      }
+
+      // Ensure project root exists (ProjectRootManager should have created it, but double-check)
+      await fs.mkdir(finalRootPath, { recursive: true })
 
       // Check if workspace is actually empty
-      const isEmpty = await this.isWorkspaceEmpty(rootPath)
+      const isEmpty = await this.isWorkspaceEmpty(finalRootPath)
       if (!isEmpty) {
         return {
           success: false,
@@ -104,10 +123,12 @@ export class BootstrapGenerator {
         }
       }
 
-      // Get file mutation kernel with projectId and rootPath
-      const mutationKernel = getFileMutationKernel(projectId, rootPath)
+      // Get file mutation kernel with projectId and finalRootPath
+      const mutationKernel = getFileMutationKernel(projectId, finalRootPath)
 
       // Generate files based on platform
+      // PHASE F: Use finalRootPath for all file operations
+      const projectRoot = finalRootPath
       let files: Array<{ path: string; content: string }> = []
 
       switch (platform) {
@@ -132,21 +153,71 @@ export class BootstrapGenerator {
         reason: 'Bootstrap: Initial project structure',
       }))
 
+      // PHASE F: Use generation mode for bootstrap (bypasses context/confidence checks)
       const result = await mutationKernel.apply({
         changes,
         reason: `Bootstrap: Create ${platform} project structure`,
+        mode: 'generation', // PHASE F: Use generation mode for bootstrap
       }, {
         createCheckpoint: false, // Bootstrap doesn't need checkpoint
         requireHighConfidence: false,
       })
 
       if (result.appliedChanges.length === 0) {
-        throw new Error('Bootstrap failed: No files were created')
+        throw new Error(
+          `Invariant violation: Bootstrap completed but no files were created. ` +
+          `projectId: ${projectId}, rootPath: ${finalRootPath}, platform: ${platform}`
+        )
       }
+
+      const filesCreated = result.appliedChanges.map((c) => c.path)
+      
+      // PHASE B: Ensure .devmate structure exists (must be before stage transitions)
+      const { ensureDevmateStructure } = await import('@/lib/os/ensureDevmateStructure')
+      const devmateResult = await ensureDevmateStructure(finalRootPath)
+      if (!devmateResult.success) {
+        throw new Error(
+          `Bootstrap failed: Cannot ensure .devmate structure: ${devmateResult.error}`
+        )
+      }
+
+      // PHASE B: Explicit lifecycle transitions (must happen before commit verification)
+      // Must transition: empty → bootstrapped → editable
+      // PHASE A: Use Manager.setStage() to persist to disk
+      const { getProjectEvolutionEngineManager } = await import('@/lib/os/ProjectEvolutionEngineManager')
+      const peeManager = getProjectEvolutionEngineManager()
+      await peeManager.getEngine(projectId, finalRootPath) // Ensure engine exists
+      
+      // PHASE B: Structured logging - bootstrap start
+      console.log('[BootstrapGenerator] Bootstrap transaction start:', {
+        projectId,
+        rootPath: finalRootPath,
+        platform,
+        filesToCreate: filesCreated.length,
+        timestamp: new Date().toISOString(),
+      })
+      
+      // Explicit lifecycle transitions (DO NOT collapse)
+      // PHASE A: Persist stage transitions to disk via Manager
+      await peeManager.setStage(projectId, 'bootstrapped', 'bootstrap')
+      await peeManager.setStage(projectId, 'editable', 'bootstrap')
+
+      // PHASE B: Atomic commit verification (throws FatalBootstrapError if invariants fail)
+      const { commitBootstrapTransaction } = await import('./bootstrapTransaction')
+      const commitResult = await commitBootstrapTransaction(projectId, finalRootPath, filesCreated)
+      
+      // PHASE B: Structured logging - commit success
+      console.log('[BootstrapGenerator] Bootstrap transaction committed:', {
+        projectId,
+        rootPath: finalRootPath,
+        filesCreated: commitResult.filesCreated.length,
+        stage: commitResult.stage,
+        committedAt: commitResult.committedAt,
+      })
 
       return {
         success: true,
-        filesCreated: result.appliedChanges.map((c) => c.path),
+        filesCreated,
       }
     } catch (error: any) {
       console.error('[BootstrapGenerator] Error:', error)

@@ -46,7 +46,12 @@ export default function Home() {
   }, [messages])
 
   useEffect(() => {
-    checkAuth()
+    // Start auth check but don't block if it's slow
+    checkAuth().catch((err) => {
+      console.error('Auth check failed:', err)
+      // If auth check fails, set loading to false so page can render
+      useAuthStore.getState().setLoading(false)
+    })
   }, [checkAuth])
 
   useEffect(() => {
@@ -59,18 +64,36 @@ export default function Home() {
   useEffect(() => {
     const checkApiKey = async () => {
       try {
-        const response = await fetch('/api/health')
-        if (!response.ok) {
-          toast.error(
-            'API key not configured! Add OPENAI_API_KEY and MONGODB_URI to Secrets',
-            { duration: 6000 }
-          )
+        // Use AbortController for timeout
+        const controller = new AbortController()
+        const timeoutId = setTimeout(() => controller.abort(), 5000) // 5 second timeout
+        
+        try {
+          const response = await fetch('/api/health', {
+            signal: controller.signal,
+            cache: 'no-store',
+          })
+          clearTimeout(timeoutId)
+          
+          if (!response.ok) {
+            toast.error(
+              'API key not configured! Add OPENAI_API_KEY and MONGODB_URI to Secrets',
+              { duration: 6000 }
+            )
+          }
+        } catch (fetchError: any) {
+          clearTimeout(timeoutId)
+          if (fetchError.name !== 'AbortError') {
+            console.error('Health check failed:', fetchError)
+          }
+          // Don't show error toast on timeout - just silently fail
         }
       } catch (err) {
-        console.error('Health check failed:', err)
+        console.error('Health check error:', err)
       }
     }
-    checkApiKey()
+    // Delay health check to not block initial render
+    setTimeout(() => checkApiKey(), 1000)
   }, [])
 
   useEffect(() => {
@@ -217,7 +240,24 @@ export default function Home() {
   }
 
   // ✅ Hooks above, now safe to use conditionals
-  if (authLoading) {
+  // Show loading only for a short time, then proceed (auth check might be slow)
+  const [showLoading, setShowLoading] = useState(true)
+  
+  useEffect(() => {
+    // Auto-hide loading after 3 seconds even if auth is still loading
+    const timer = setTimeout(() => {
+      setShowLoading(false)
+    }, 3000)
+    
+    // Also hide when auth loading completes
+    if (!authLoading) {
+      setShowLoading(false)
+    }
+    
+    return () => clearTimeout(timer)
+  }, [authLoading])
+  
+  if (authLoading && showLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
         <div className="text-center">
@@ -303,17 +343,19 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
             {currentDomain === 'academic' ? (
               <Suspense fallback={<div className="flex items-center justify-center h-full"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div></div>}>
-                <ResearchPanel />
+                <div className="flex-1 min-h-0 overflow-hidden">
+                  <ResearchPanel />
+                </div>
               </Suspense>
             ) : currentDomain === 'app-generator' ? (
-              <div className="max-w-6xl mx-auto px-4 py-6">
+              <div className="flex-1 min-h-0 overflow-hidden">
                 <AppGeneratorPanel />
               </div>
             ) : (
-              <div className="max-w-6xl mx-auto px-4 py-6">
+              <div className="flex-1 min-h-0 overflow-hidden">
                 <ChatWindow />
               </div>
             )}

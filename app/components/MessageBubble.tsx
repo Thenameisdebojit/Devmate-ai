@@ -18,13 +18,13 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
 
   return (
     <div
-      className={`group mb-6 ${
+      className={`group mb-6 w-full ${
         isUser 
           ? 'bg-transparent' 
           : 'bg-gradient-to-r from-gray-50/80 to-gray-100/50 dark:from-gray-800/50 dark:to-gray-900/30 backdrop-blur-sm'
-      } py-6 px-4 rounded-2xl transition-all duration-300 ease-out animate-in fade-in slide-in-from-bottom-4 hover:shadow-lg dark:hover:shadow-indigo-500/5`}
+      } py-5 px-5 rounded-xl transition-all duration-300 ease-out animate-in fade-in slide-in-from-bottom-4 hover:shadow-md dark:hover:shadow-indigo-500/5`}
     >
-      <div className="max-w-full flex gap-4">
+      <div className="w-full flex gap-4 max-w-full">
         {/* Avatar */}
         <div className="flex-shrink-0">
           {isUser ? (
@@ -40,25 +40,25 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
 
         {/* Content */}
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-2">
+          <div className="flex items-center gap-2 mb-3 flex-wrap">
             <span className="text-sm font-semibold text-gray-900 dark:text-white">
               {isUser ? 'You' : 'Devmate'}
             </span>
             {!isUser && message.modelUsed && (
               <span className="text-xs px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 font-medium">
-                {message.modelUsed.includes('gpt-5') ? '⚡ GPT-5' : 
-                 message.modelUsed.includes('gpt-4') ? '⚡ GPT-4o' :
-                 message.modelUsed.includes('grok-4') ? '🚀 Grok 4' :
-                 message.modelUsed.includes('grok-2') ? '🤖 Grok 2' :
-                 message.modelUsed.includes('grok-vision') ? '👁️ Grok Vision' :
-                 message.modelUsed.includes('gemini-2.5-pro') ? '🔮 Gemini Pro' :
-                 message.modelUsed.includes('gemini-2.5-flash') ? '⚡ Gemini Flash' : 
+                {message.modelUsed.includes('gpt-5.1') ? '⚡ GPT-5.1' : 
+                 message.modelUsed.includes('gpt-5') ? '⚡ GPT-5' :
+                 message.modelUsed.includes('gemini-3-pro') ? '🔮 Gemini 3 Pro' :
+                 message.modelUsed.includes('gemini-2.5-flash') ? '⚡ Gemini 2.5 Flash' :
+                 message.modelUsed.includes('kimi-k2') ? '🌙 Kimi K2' :
+                 message.modelUsed.includes('deepseek-3') ? '🔍 DeepSeek 3' :
+                 message.modelUsed.includes('grok-4') ? '🚀 Grok 4' : 
                  '🤖 AI'}
               </span>
             )}
           </div>
           
-          <div className="prose prose-sm dark:prose-invert max-w-none">
+          <div className="break-words overflow-wrap-anywhere message-content">
             {message.content ? (
               <ReactMarkdown
                 components={{
@@ -68,23 +68,40 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
                     const isInline = !className
                     
                     return !isInline && match ? (
-                      <div className="relative group/code my-4 rounded-xl overflow-hidden shadow-xl border border-gray-200 dark:border-gray-700">
-                        <div className="sticky top-2 right-2 float-right z-10 mb-[-2rem]">
+                      <div className="relative my-4 w-full max-w-full rounded-lg overflow-hidden shadow-lg border border-gray-200 dark:border-gray-700 bg-gray-900 dark:bg-gray-950">
+                        <div className="absolute top-2 right-2 z-10">
                           <CopyButton text={codeString} />
                         </div>
-                        <SyntaxHighlighter
-                          style={vscDarkPlus as any}
-                          language={match[1]}
-                          PreTag="div"
-                          className="!bg-gray-900 dark:!bg-gray-950 !m-0 !p-4"
-                          customStyle={{
-                            background: 'transparent',
-                            fontSize: '0.875rem',
-                            lineHeight: '1.5'
-                          }}
-                        >
-                          {codeString}
-                        </SyntaxHighlighter>
+                        <div className="overflow-x-auto max-w-full code-container">
+                          <SyntaxHighlighter
+                            style={vscDarkPlus as any}
+                            language={match[1]}
+                            PreTag="div"
+                            className="!bg-transparent !m-0 !p-4"
+                            customStyle={{
+                              background: 'transparent',
+                              fontSize: '0.875rem',
+                              lineHeight: '1.6',
+                              margin: 0,
+                              padding: '1rem',
+                              minWidth: 'fit-content',
+                              maxWidth: '100%',
+                              width: '100%'
+                            }}
+                            codeTagProps={{
+                              style: {
+                                fontFamily: 'JetBrains Mono, Monaco, Courier New, monospace',
+                                whiteSpace: 'pre',
+                                wordBreak: 'normal',
+                                overflowWrap: 'normal',
+                                display: 'block',
+                                maxWidth: '100%'
+                              }
+                            }}
+                          >
+                            {codeString}
+                          </SyntaxHighlighter>
+                        </div>
                       </div>
                     ) : (
                       <code
@@ -96,19 +113,44 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
                     )
                   },
                   p: ({ children }) => (
-                    <p className="mb-3 text-gray-800 dark:text-gray-200 leading-relaxed">
+                    <p className="mb-4 text-gray-800 dark:text-gray-200 leading-relaxed break-words">
                       {children}
                     </p>
                   ),
                   ul: ({ children }) => (
-                    <ul className="list-disc list-inside mb-3 space-y-1 text-gray-800 dark:text-gray-200">
+                    <ul className="list-disc list-outside mb-4 ml-6 space-y-2 text-gray-800 dark:text-gray-200">
                       {children}
                     </ul>
                   ),
                   ol: ({ children }) => (
-                    <ol className="list-decimal list-inside mb-3 space-y-1 text-gray-800 dark:text-gray-200">
+                    <ol className="list-decimal list-outside mb-4 ml-6 space-y-2 text-gray-800 dark:text-gray-200">
                       {children}
                     </ol>
+                  ),
+                  h1: ({ children }) => (
+                    <h1 className="text-2xl font-bold mb-4 mt-6 text-gray-900 dark:text-white">
+                      {children}
+                    </h1>
+                  ),
+                  h2: ({ children }) => (
+                    <h2 className="text-xl font-semibold mb-3 mt-5 text-gray-900 dark:text-white">
+                      {children}
+                    </h2>
+                  ),
+                  h3: ({ children }) => (
+                    <h3 className="text-lg font-semibold mb-2 mt-4 text-gray-900 dark:text-white">
+                      {children}
+                    </h3>
+                  ),
+                  blockquote: ({ children }) => (
+                    <blockquote className="border-l-4 border-indigo-500 pl-4 my-4 italic text-gray-700 dark:text-gray-300">
+                      {children}
+                    </blockquote>
+                  ),
+                  pre: ({ children }) => (
+                    <pre className="overflow-x-auto my-4 p-4 bg-gray-100 dark:bg-gray-800 rounded-lg">
+                      {children}
+                    </pre>
                   ),
                 }}
               >

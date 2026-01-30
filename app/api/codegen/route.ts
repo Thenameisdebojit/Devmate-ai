@@ -14,15 +14,17 @@ interface GenerationStep {
 }
 
 const SYSTEM_INSTRUCTION = `You are an expert full-stack application architect and developer.
-Generate complete, production-ready applications with proper project structure.
+Generate complete, production-ready, OPTIMIZED applications with proper project structure.
 
 RULES:
 1. Generate COMPLETE, working applications - no placeholders or TODOs
 2. Include ALL necessary files: package.json, configs, routes, components, etc.
 3. Use modern best practices and latest frameworks
 4. Include proper error handling and validation
-5. Generate clean, maintainable code with minimal comments
+5. Generate OPTIMIZED, MINIMAL code - comments ONLY for complex logic, keep code concise and production-ready
 6. Include setup instructions in README.md
+7. OPTIMIZE for performance - use efficient algorithms, avoid unnecessary code, minimize bundle size
+8. Comments should be MINIMAL - only add comments when logic is truly complex or non-obvious
 
 OUTPUT FORMAT:
 Return a JSON object with this exact structure:
@@ -83,6 +85,8 @@ Generate a full project structure with:
 - Modern, clean UI with responsive design
 - Proper error handling and validation
 - No placeholder code - everything must be complete and working
+- OPTIMIZED code - minimal comments, efficient algorithms, production-ready performance
+- Comments ONLY for complex logic - keep code clean and self-documenting
 
 Remember to output ONLY valid JSON in the specified format.`
 
@@ -132,16 +136,16 @@ Remember to output ONLY valid JSON in the specified format.`
             sendStep({
               step: 3,
               total: 5,
-              message: 'Generating application code with GPT-5...',
+              message: 'Generating application code with GPT-5.1...',
               status: 'in_progress'
             })
 
             let accumulatedText = ''
-            for await (const text of streamAIModel('openai:gpt-5', {
+            for await (const text of streamAIModel('openai:gpt-5.1', {
               prompt: enhancedPrompt,
               systemInstruction: SYSTEM_INSTRUCTION,
-              temperature: 0.2,
-              maxTokens: 8192,
+              temperature: 0.2, // Balanced temperature for optimized but complete code
+              maxTokens: 8192, // Sufficient for complete code without being excessive
             })) {
               accumulatedText += text
               controller.enqueue(
@@ -234,11 +238,11 @@ Remember to output ONLY valid JSON in the specified format.`
         },
       })
     } else {
-      const response = await callAIModel('openai:gpt-5', {
+      const response = await callAIModel('openai:gpt-5.1', {
         prompt: enhancedPrompt,
         systemInstruction: SYSTEM_INSTRUCTION,
-        temperature: 0.2,
-        maxTokens: 8192,
+        temperature: 0.2, // Balanced temperature for optimized but complete code
+        maxTokens: 8192, // Sufficient for complete code without being excessive
       })
 
       const jsonMatch = response.match(/\{[\s\S]*\}/)

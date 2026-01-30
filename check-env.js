@@ -26,9 +26,16 @@ if (!fs.existsSync(envPath)) {
   }
   
   console.log('\n⚠️  Please edit .env.local and add your API keys:');
+  console.log('   Required:');
   console.log('   1. GEMINI_API_KEY from https://makersuite.google.com/app/apikey');
   console.log('   2. MONGODB_URI from https://www.mongodb.com/cloud/atlas');
-  console.log('   3. JWT_SECRET (any random secure string)\n');
+  console.log('   3. JWT_SECRET (any random secure string)');
+  console.log('\n   Optional (for additional AI models):');
+  console.log('   4. OPENAI_API_KEY from https://platform.openai.com/api-keys');
+  console.log('   5. XAI_API_KEY from https://console.x.ai (for Grok 4)');
+  console.log('   6. DEEPSEEK_API_KEY from https://platform.deepseek.com (for DeepSeek 3)');
+  console.log('   7. MOONSHOT_API_KEY from https://platform.moonshot.cn (for Kimi K2)');
+  console.log('   8. TAVILY_API_KEY from https://tavily.com (for web search)\n');
   process.exit(1);
 }
 

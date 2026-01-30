@@ -26,12 +26,12 @@ export async function GET(req: NextRequest) {
       )
     }
 
-    // Check if workspace is registered, if not return default status
+    // PHASE F: Check if workspace is registered, if not return default status
     let workspace
     let projectRoot
     try {
-      workspace = WorkspaceRegistry.get(projectId)
-      projectRoot = workspace.getRootPath()
+      workspace = await WorkspaceRegistry.get(projectId)
+      projectRoot = await WorkspaceRegistry.getRootPath(projectId)
     } catch (error: any) {
       // Workspace not initialized - return default status
       return NextResponse.json({

@@ -26,6 +26,8 @@ interface IDEChatProps {
   isProcessing?: boolean
   agentState?: 'idle' | 'thinking' | 'acting' | 'done' | 'error' // PHASE 7: Agent state
   agentMessage?: string // PHASE 7: Current agent action message
+  workspaceStage?: 'empty' | 'bootstrapped' | 'generated' | 'running' | 'error' // PHASE D: Workspace stage
+  fileCount?: number // PHASE D: File count for context
 }
 
 export default function IDEChat({
@@ -39,6 +41,8 @@ export default function IDEChat({
   isProcessing = false,
   agentState = 'idle',
   agentMessage,
+  workspaceStage = 'empty',
+  fileCount = 0,
 }: IDEChatProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
@@ -57,10 +61,11 @@ export default function IDEChat({
       // Ensure input is valid - use default if empty
       let inputValue = input?.trim() || ''
       
-      // Handle context - append context info to input
+      // Handle context - append context info to input (but keep context data separate)
       if (context) {
         if (context.type === 'image') {
-          inputValue = `${inputValue} [Image: ${context.data.filename}]`
+          // Add image reference to description, but context.data contains actual base64
+          inputValue = `${inputValue} [Image: ${context.data.filename}]`.trim()
         } else if (context.type === 'web') {
           inputValue = `${inputValue} [Web Search Enabled]`
         } else if (context.type === 'browser') {
@@ -73,6 +78,12 @@ export default function IDEChat({
       
       // Build intent - IntentBuilder handles empty descriptions
       const intent = IntentBuilder.build(action, finalInput)
+      
+      // Attach context to intent (contains actual image data, not just filename)
+      if (context) {
+        (intent as any).context = context
+      }
+      
       const validation = IntentBuilder.validate(intent)
 
       if (!validation.valid) {
@@ -108,11 +119,13 @@ export default function IDEChat({
       )}
 
       {/* PHASE 7: Agent State Indicator */}
-      {(agentState !== 'idle' || agentMessage) && (
-        <div className="px-3 py-2 border-b border-gray-200 dark:border-gray-800">
-          <AgentStateIndicator state={agentState} message={agentMessage} />
-        </div>
-      )}
+      {/* PHASE D: Always show agent state, even when idle (feels intentional) */}
+      <div className="px-3 py-2 border-b border-gray-200 dark:border-gray-800">
+        <AgentStateIndicator 
+          state={agentState} 
+          message={agentMessage || (agentState === 'idle' ? 'Ready' : undefined)} 
+        />
+      </div>
 
       {/* Chat Messages */}
       <div className="flex-1 min-h-0 overflow-y-auto">
@@ -121,7 +134,60 @@ export default function IDEChat({
           confidenceReport={confidenceReport}
           onPlanApproved={onPlanApproved}
           onStepApproved={onStepApproved}
+          onPlanConfirmed={(messageId) => {
+            // PHASE F-3: Handle plan confirmation - emit event to continue execution
+            const message = messages.find(m => m.id === messageId)
+            if (message?.metadata?.planType) {
+              // Emit confirmation event to backend
+              // This will be handled by AgentExecutionRouter to continue execution
+              window.dispatchEvent(new CustomEvent('plan-confirmed', { 
+                detail: { messageId, planType: message.metadata.planType } 
+              }))
+            }
+          }}
+          onPlanCancelled={(messageId) => {
+            // PHASE F-3: Handle plan cancellation
+            window.dispatchEvent(new CustomEvent('plan-cancelled', { 
+              detail: { messageId } 
+            }))
+          }}
         />
+        
+        {/* PHASE D: "What Next?" Suggestions (non-AI, UI hints) */}
+        {messages.length === 0 && agentState === 'idle' && (
+          <div className="p-4 space-y-2">
+            <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              What would you like to do?
+            </div>
+            {workspaceStage === 'empty' && (
+              <div className="text-xs text-gray-600 dark:text-gray-400">
+                💡 Describe what you want to build, e.g., "create a calculator app" or "build a todo list"
+              </div>
+            )}
+            {workspaceStage === 'bootstrapped' && (
+              <div className="text-xs text-gray-600 dark:text-gray-400 space-y-1">
+                <div>💡 Click Run to preview your app</div>
+                <div>💡 Ask me to add features, e.g., "add a login page"</div>
+                <div>💡 Select a file to edit</div>
+              </div>
+            )}
+            {workspaceStage === 'generated' && (
+              <div className="text-xs text-gray-600 dark:text-gray-400 space-y-1">
+                <div>💡 Click Run to preview your app</div>
+                <div>💡 Ask me to modify features, e.g., "add authentication"</div>
+                <div>💡 Select a file to edit</div>
+              </div>
+            )}
+            {workspaceStage === 'running' && (
+              <div className="text-xs text-gray-600 dark:text-gray-400 space-y-1">
+                <div>💡 Your app is running! Preview is available</div>
+                <div>💡 Ask me to add or modify features</div>
+                <div>💡 Select a file to edit</div>
+              </div>
+            )}
+          </div>
+        )}
+        
         <div ref={messagesEndRef} />
       </div>
 

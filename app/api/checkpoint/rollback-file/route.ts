@@ -25,8 +25,11 @@ export async function POST(req: NextRequest) {
     }
 
     // PHASE 4: Verify workspace exists
+    let workspace
+    let projectPath
     try {
-      WorkspaceRegistry.get(projectId)
+      workspace = await WorkspaceRegistry.get(projectId)
+      projectPath = await WorkspaceRegistry.getRootPath(projectId)
     } catch (error: any) {
       return NextResponse.json(
         { error: `Workspace not found for projectId: ${projectId}` },
@@ -39,8 +42,6 @@ export async function POST(req: NextRequest) {
     await checkpointManager.rollbackFile(projectId, filePath, checkpointId)
 
     // PHASE 4: Emit FILE_CHANGED event via workspace
-    const workspace = WorkspaceRegistry.get(projectId)
-    const projectPath = join(process.cwd(), 'runtime-projects', projectId)
     const { promises: fs } = await import('fs')
     
     try {

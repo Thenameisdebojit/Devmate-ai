@@ -10,8 +10,8 @@ import {
 } from 'react-icons/fi'
 
 interface IDEActivityBarProps {
-  activeView: 'explorer' | 'search' | 'source-control' | 'run' | 'extensions'
-  onViewChange: (view: 'explorer' | 'search' | 'source-control' | 'run' | 'extensions') => void
+  activeView: 'explorer' | 'search' | 'source-control' | 'run' | 'extensions' | 'settings'
+  onViewChange: (view: 'explorer' | 'search' | 'source-control' | 'run' | 'extensions' | 'settings') => void
   gitStatus?: {
     initialized: boolean
     hasChanges: boolean

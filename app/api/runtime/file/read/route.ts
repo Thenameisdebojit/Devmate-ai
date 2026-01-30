@@ -7,6 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { promises as fs } from 'fs'
 import { join } from 'path'
+import { WorkspaceRegistry } from '@/lib/workspace/WorkspaceRegistry'
 
 export const runtime = 'nodejs'
 export const maxDuration = 30
@@ -24,7 +25,19 @@ export async function GET(req: NextRequest) {
       )
     }
 
-    const projectPath = join(process.cwd(), 'runtime-projects', projectId)
+    // PHASE F: Use ProjectRootManager for consistent path resolution
+    const { getProjectRootManager } = await import('@/lib/workspace/ProjectRootManager')
+    const rootManager = getProjectRootManager()
+    let projectPath: string
+    
+    try {
+      projectPath = await rootManager.getProjectRoot(projectId)
+    } catch {
+      // Fallback to old path computation if workspace not registered
+      projectPath = join(process.cwd(), 'runtime-projects', projectId)
+      console.warn(`[FILE_READ] Workspace not registered for projectId: ${projectId}, using fallback path: ${projectPath}`)
+    }
+    
     const fullPath = join(projectPath, filePath)
 
     // Security: Ensure path is within project directory
